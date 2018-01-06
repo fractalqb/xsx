@@ -5,7 +5,7 @@ import (
 	"bytes"
 	"testing"
 
-	"git.fractalqb.de/xsx"
+	"github.com/fractalqb/xsx"
 )
 
 func pullStr(str string) *xsx.PullParser {

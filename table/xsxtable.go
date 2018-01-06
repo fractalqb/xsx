@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"git.fractalqb.de/xsx"
+	"github.com/fractalqb/xsx"
 )
 
 type ColType int

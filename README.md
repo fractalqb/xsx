@@ -1,4 +1,4 @@
-# XSX
+# ![XSX-Logo](doc/xsx-logo.png?raw=true) – eXtended S-eXpressions
 
 Package XSX provides tools for parsing something I call eXtended S-eXpressions.
 Extended means the following things:

@@ -1,0 +1,4 @@
+*.cov
+/Vasquess.json
+coverage.html
+coverage.out

@@ -1,40 +1,17 @@
 package table
 
 import (
+	"errors"
 	"fmt"
-	"strconv"
 
 	"github.com/fractalqb/xsx"
+	"github.com/fractalqb/xsx/gem"
 )
-
-type ColType int
-
-const (
-	Bool ColType = iota
-	Int
-	Float
-	String
-)
-
-func (ct ColType) String() string {
-	switch ct {
-	case Bool:
-		return "bool"
-	case Int:
-		return "int"
-	case Float:
-		return "float"
-	case String:
-		return "string"
-	default:
-		return "<unsupported type: " + strconv.Itoa(int(ct)) + ">"
-	}
-}
 
 type Column struct {
 	Name string
-	Type ColType
 	Meta bool
+	Tags []gem.Expr
 }
 
 type Definition []Column
@@ -44,7 +21,7 @@ func ReadDef(xrd *xsx.PullParser) (res Definition, err error) {
 		return nil, err
 	}
 	var tok xsx.Token
-	for tok, err = xrd.Next(); tok != xsx.TokEnd || xrd.LastBracket() != ']'; tok, err = xrd.Next() {
+	for tok, err = xrd.Next(); tok != xsx.TokEnd || xrd.LastBrace() != ']'; tok, err = xrd.Next() {
 		if err != nil {
 			return res, err
 		}
@@ -61,7 +38,6 @@ func readCol(xrd *xsx.PullParser) (res Column, err error) {
 	if xrd.LastToken() == xsx.TokAtom {
 		res = Column{
 			Name: xrd.Atom,
-			Type: String,
 			Meta: xrd.WasMeta()}
 		return res, nil
 	}
@@ -73,47 +49,26 @@ func readCol(xrd *xsx.PullParser) (res Column, err error) {
 	if err != nil {
 		return Column{}, err
 	}
-	tok, err := xrd.Next()
-	if err != nil {
-		return Column{}, err
+	var tags []gem.Expr
+	for tok, err := xrd.Next(); tok != xsx.TokEnd; tok, err = xrd.Next() {
+		switch {
+		case err != nil:
+			return Column{}, err
+		case tok == xsx.TokEOI:
+			return Column{}, errors.New("premature end of input")
+		}
+		tag, err := gem.ReadCurrent(xrd)
+		if err != nil {
+			return Column{}, err
+		}
+		tags = append(tags, tag)
 	}
-	typ := String
-	switch tok {
-	case xsx.TokEnd:
-		if xrd.LastBracket() != ')' {
-			return Column{}, fmt.Errorf("in column '%s' expected ')', got '%c'",
-				name,
-				xrd.LastBracket())
-		} else {
-			return Column{Name: name, Type: String, Meta: metaCol}, nil
-		}
-	case xsx.TokAtom:
-		if xrd.WasMeta() {
-			return Column{}, fmt.Errorf("unsupported meta token in column '%s'", name)
-		}
-		switch xrd.Atom {
-		case "bool":
-			typ = Bool
-		case "int":
-			typ = Int
-		case "float":
-			typ = Float
-		case "string":
-			typ = String
-		default:
-			return Column{}, fmt.Errorf("unknown type '%s' for column '%s'",
-				xrd.Atom,
-				name)
-		}
-	default:
-		return Column{}, fmt.Errorf("unexpected token '%s' in column '%s'", tok, name)
-	}
-	if err = xrd.NextEnd(")"); err != nil {
+	if err = xrd.ExpectEnd(")"); err != nil {
 		return Column{}, fmt.Errorf("in column '%s' expected ')', got '%c'",
 			name,
-			xrd.LastBracket())
+			xrd.LastBrace())
 	}
-	return Column{Name: name, Type: typ, Meta: metaCol}, nil
+	return Column{Name: name, Tags: tags, Meta: metaCol}, nil
 }
 
 // ColIndex returns the index of the column with name 'colName', if any.
@@ -127,19 +82,19 @@ func (tdef Definition) ColIndex(colName string) int {
 	return -1
 }
 
-func (tdef Definition) NextRow(xrd *xsx.PullParser, row []string) ([]string, error) {
-	if row == nil || len(row) < len(tdef) {
-		row = make([]string, len(tdef))
+func (tdef Definition) NextRow(xrd *xsx.PullParser, row []gem.Expr) ([]gem.Expr, error) {
+	if row == nil || len(row) < len(tdef) || 3*len(row) < cap(row) {
+		row = make([]gem.Expr, len(tdef))
 	}
 	if err := xrd.NextBegin("(", xsx.NoMeta); err == xsx.PullEOI {
 		return nil, xsx.PullEOI
 	}
 	for i := 0; i < len(tdef); i++ {
-		atom, err := xrd.NextAtom(xsx.NoMeta)
+		elem, err := gem.ReadNext(xrd)
 		if err != nil {
 			return row[:i], err
 		}
-		row[i] = atom
+		row[i] = elem
 	}
 	if err := xrd.NextEnd(")"); err != nil {
 		return row, err

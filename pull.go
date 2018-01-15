@@ -127,7 +127,7 @@ func (p *PullParser) LastToken() Token {
 	return p.toks[p.tokRd-1].tok
 }
 
-func (p *PullParser) LastBracket() rune {
+func (p *PullParser) LastBrace() rune {
 	if p.tokRd <= 0 {
 		return 0
 	}
@@ -215,8 +215,8 @@ func (p *PullParser) ExpectBegin(whichBrackets string, meta ExpectMeta) error {
 	case tok != TokBegin:
 		return fmt.Errorf("expected begin token, got %s", tok)
 	case len(whichBrackets) > 0 &&
-		strings.IndexRune(whichBrackets, p.LastBracket()) < 0:
-		return fmt.Errorf("expected on of '%s', got %c", whichBrackets, p.LastBracket())
+		strings.IndexRune(whichBrackets, p.LastBrace()) < 0:
+		return fmt.Errorf("expected on of '%s', got %c", whichBrackets, p.LastBrace())
 	}
 	return checkMeta(p, meta)
 }
@@ -239,8 +239,8 @@ func (p *PullParser) ExpectEnd(whichBrackets string) error {
 	case tok != TokEnd:
 		return fmt.Errorf("expected end token, got %s", tok)
 	case len(whichBrackets) > 0 &&
-		strings.IndexRune(whichBrackets, p.LastBracket()) < 0:
-		return fmt.Errorf("expected on of '%s', got %c", whichBrackets, p.LastBracket())
+		strings.IndexRune(whichBrackets, p.LastBrace()) < 0:
+		return fmt.Errorf("expected on of '%s', got %c", whichBrackets, p.LastBrace())
 	default:
 		return nil
 	}

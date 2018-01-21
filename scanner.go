@@ -45,13 +45,25 @@ func (err *ScanError) Reason() error {
 // BeginFunc is called by Scanner when an opening bracked is detected.
 type BeginFunc func(scnPos uint64, isMeta bool, brace rune) error
 
+func BeginNop(scnPos uint64, isMeta bool, brace rune) error {
+	return nil
+}
+
 // EndFunc is called by Scanner when a closing bracked is detected that matches
 // the correspondig opening bracked. For not matching bracktes Scanner.Next
 // returns a ScanError before EndFunc would have been called.
 type EndFunc func(scnPos uint64, brace rune) error
 
+func EndNop(scnPos uint64, brace rune) error {
+	return nil
+}
+
 // AtomFunc is called by Scanner when an XSX atom is detected.
 type AtomFunc func(scnPos uint64, isMeta bool, atom string, quoted bool) error
+
+func AtomNop(scnPos uint64, isMeta bool, atom string, quoted bool) error {
+	return nil
+}
 
 // Scanner implements a callback based scanner for XSX files
 type Scanner struct {
@@ -59,6 +71,7 @@ type Scanner struct {
 	cbEnd   EndFunc
 	cbAtom  AtomFunc
 
+	WsBuf     *bytes.Buffer // TODO opt. collect whitespace
 	charCount uint64
 	stat      scanStat
 	strEsc    bool
@@ -85,51 +98,33 @@ func (s *Scanner) Push(c rune) (done bool, err error) {
 		switch c {
 		case '(':
 			s.nestPush(')')
-			if err = s.cbBegin(s.charCount, s.meta, '('); err != nil {
-				return true, &ScanError{
-					pos: s.charCount,
-					msg: fmt.Sprintf("xsx psuh: begin '(' meta=%t failed: %s",
-						s.meta,
-						err.Error()),
-					rsn: err}
+			if err = s.callBegin(s.charCount, s.meta, '('); err != nil {
+				return true, err
 			}
 			s.meta = false
+			s.clearWs()
 		case '[':
 			s.nestPush(']')
-			if err = s.cbBegin(s.charCount, s.meta, '['); err != nil {
-				return true, &ScanError{
-					pos: s.charCount,
-					msg: fmt.Sprintf("xsx psuh: begin '[' meta=%t failed: %s",
-						s.meta,
-						err.Error()),
-					rsn: err}
+			if err = s.callBegin(s.charCount, s.meta, '['); err != nil {
+				return true, err
 			}
 			s.meta = false
+			s.clearWs()
 		case '{':
 			s.nestPush('}')
-			if err = s.cbBegin(s.charCount, s.meta, '{'); err != nil {
-				return true, &ScanError{
-					pos: s.charCount,
-					msg: fmt.Sprintf("xsx psuh: begin '{' meta=%t failed: %s",
-						s.meta,
-						err.Error()),
-					rsn: err}
+			if err = s.callBegin(s.charCount, s.meta, '{'); err != nil {
+				return true, err
 			}
 			s.meta = false
+			s.clearWs()
 		case ')', ']', '}':
 			if s.meta {
-				if err = s.cbAtom(s.charCount, false, MetaStr, false); err != nil {
-					return true, &ScanError{
-						pos: s.charCount,
-						msg: fmt.Sprintf("xsx push: atom '%s' meta=%t quoted=%t failed: %s",
-							MetaStr,
-							false,
-							false,
-							err.Error()),
-						rsn: err}
+				if err = s.callAtom(s.charCount, false, MetaStr, false); err != nil {
+					return true, err
 				}
 				s.token.Reset()
 				s.meta = false
+				s.clearWs()
 			}
 			if s.Depth() == 0 {
 				return true, &ScanError{
@@ -146,14 +141,10 @@ func (s *Scanner) Push(c rune) (done bool, err error) {
 						c,
 						e)}
 			}
-			if err = s.cbEnd(s.charCount, c); err != nil {
-				return true, &ScanError{
-					pos: s.charCount,
-					msg: fmt.Sprintf("xsx push: end '%c' failed: %s",
-						c,
-						err.Error()),
-					rsn: err}
+			if err = s.callEnd(s.charCount, c); err != nil {
+				return true, err
 			}
+			s.clearWs()
 		case '"':
 			s.stat = tokStr
 		case Meta:
@@ -168,106 +159,64 @@ func (s *Scanner) Push(c rune) (done bool, err error) {
 			if !unicode.IsSpace(c) {
 				s.stat = tokChars
 				s.token.WriteRune(c)
-			} else if s.meta {
-				if err = s.cbAtom(s.charCount, false, MetaStr, false); err != nil {
-					return true, &ScanError{
-						pos: s.charCount,
-						msg: fmt.Sprintf("xsx push: atom '%s' meta=%t quoted=%t failed: %s",
-							MetaStr,
-							false,
-							false,
-							err.Error()),
-						rsn: err}
+			} else {
+				if s.meta {
+					if err = s.callAtom(s.charCount, false, MetaStr, false); err != nil {
+						return true, err
+					}
+					s.token.Reset()
+					s.meta = false
+					s.clearWs()
 				}
-				s.token.Reset()
-				s.meta = false
+				s.memWs(c)
 			}
 		} // case: tokNone
 	case tokChars:
 		switch c {
 		case '(':
-			if err = s.cbAtom(s.charCount, s.meta, s.token.String(), false); err != nil {
-				return true, &ScanError{
-					pos: s.charCount,
-					msg: fmt.Sprintf("xsx push: atom '%s' meta=%t quoted=%t failed: %s",
-						s.token.String(),
-						s.meta,
-						false,
-						err.Error()),
-					rsn: err}
+			if err = s.callAtom(s.charCount, s.meta, s.token.String(), false); err != nil {
+				return true, err
 			}
 			s.token.Reset()
 			s.meta = false
 			s.stat = tokNone
 			s.nestPush(')')
-			if err = s.cbBegin(s.charCount, s.meta, '('); err != nil {
-				return true, &ScanError{
-					pos: s.charCount,
-					msg: fmt.Sprintf("xsx psuh: begin '(' meta=%t failed: %s",
-						s.meta,
-						err.Error()),
-					rsn: err}
+			s.clearWs()
+			if err = s.callBegin(s.charCount, s.meta, '('); err != nil {
+				return true, err
 			}
 		case '[':
-			if err = s.cbAtom(s.charCount, s.meta, s.token.String(), false); err != nil {
-				return true, &ScanError{
-					pos: s.charCount,
-					msg: fmt.Sprintf("xsx push: atom '%s' meta=%t quoted=%t failed: %s",
-						s.token.String(),
-						s.meta,
-						false,
-						err.Error()),
-					rsn: err}
+			if err = s.callAtom(s.charCount, s.meta, s.token.String(), false); err != nil {
+				return true, err
 			}
 			s.token.Reset()
 			s.meta = false
 			s.stat = tokNone
 			s.nestPush(']')
-			if s.cbBegin(s.charCount, s.meta, '['); err != nil {
-				return true, &ScanError{
-					pos: s.charCount,
-					msg: fmt.Sprintf("xsx psuh: begin '[' meta=%t failed: %s",
-						s.meta,
-						err.Error()),
-					rsn: err}
+			s.clearWs()
+			if err = s.callBegin(s.charCount, s.meta, '['); err != nil {
+				return true, err
 			}
 		case '{':
-			if err = s.cbAtom(s.charCount, s.meta, s.token.String(), false); err != nil {
-				return true, &ScanError{
-					pos: s.charCount,
-					msg: fmt.Sprintf("xsx push: atom '%s' meta=%t quoted=%t failed: %s",
-						s.token.String(),
-						s.meta,
-						false,
-						err.Error()),
-					rsn: err}
+			if err = s.callAtom(s.charCount, s.meta, s.token.String(), false); err != nil {
+				return true, err
 			}
 			s.token.Reset()
 			s.meta = false
 			s.stat = tokNone
 			s.nestPush('}')
-			if err = s.cbBegin(s.charCount, s.meta, '{'); err != nil {
-				return true, &ScanError{
-					pos: s.charCount,
-					msg: fmt.Sprintf("xsx psuh: begin '{' meta=%t failed: %s",
-						s.meta,
-						err.Error()),
-					rsn: err}
+			s.clearWs()
+			if err = s.callBegin(s.charCount, s.meta, '{'); err != nil {
+				return true, err
 			}
 		case ')', ']', '}':
-			if err = s.cbAtom(s.charCount, s.meta, s.token.String(), false); err != nil {
-				return true, &ScanError{
-					pos: s.charCount,
-					msg: fmt.Sprintf("xsx push: atom '%s' meta=%t quoted=%t failed: %s",
-						s.token.String(),
-						s.meta,
-						false,
-						err.Error()),
-					rsn: err}
+			if err = s.callAtom(s.charCount, s.meta, s.token.String(), false); err != nil {
+				return true, err
 			}
 			s.token.Reset()
 			s.meta = false
 			s.stat = tokNone
+			s.clearWs()
 			if s.Depth() == 0 {
 				return true, &ScanError{
 					pos: s.charCount,
@@ -282,31 +231,36 @@ func (s *Scanner) Push(c rune) (done bool, err error) {
 						c,
 						e)}
 			}
-			if err = s.cbEnd(s.charCount, c); err != nil {
-				return true, &ScanError{
-					pos: s.charCount,
-					msg: fmt.Sprintf("xsx push: end '%c' failed: %s",
-						c,
-						err.Error()),
-					rsn: err}
+			if err = s.callEnd(s.charCount, c); err != nil {
+				return true, err
 			}
 			done = s.Depth() == 0
 		case '"':
-			s.cbAtom(s.charCount, s.meta, s.token.String(), false)
+			if err = s.callAtom(s.charCount, s.meta, s.token.String(), false); err != nil {
+				return true, err
+			}
 			s.token.Reset()
 			s.meta = false
 			s.stat = tokStr
+			s.clearWs()
 		case Meta:
-			s.cbAtom(s.charCount, s.meta, s.token.String(), false)
+			if err = s.callAtom(s.charCount, s.meta, s.token.String(), false); err != nil {
+				return true, err
+			}
 			s.token.Reset()
 			s.meta = true
 			s.stat = tokNone
+			s.clearWs()
 		default:
 			if unicode.IsSpace(c) {
-				s.cbAtom(s.charCount, s.meta, s.token.String(), false)
+				if err = s.callAtom(s.charCount, s.meta, s.token.String(), false); err != nil {
+					return true, err
+				}
 				s.token.Reset()
 				s.meta = false
 				s.stat = tokNone
+				s.clearWs()
+				s.memWs(c)
 				done = s.Depth() == 0
 			} else {
 				s.token.WriteRune(c)
@@ -319,10 +273,13 @@ func (s *Scanner) Push(c rune) (done bool, err error) {
 		} else {
 			switch c {
 			case '"':
-				s.cbAtom(s.charCount, s.meta, s.token.String(), true)
+				if err = s.callAtom(s.charCount, s.meta, s.token.String(), true); err != nil {
+					return true, err
+				}
 				s.token.Reset()
 				s.meta = false
 				s.stat = tokNone
+				s.clearWs()
 				done = s.Depth() == 0
 			case '\\':
 				// assert: !s.strEsc
@@ -339,27 +296,13 @@ func (s *Scanner) Finish() (err error) {
 	switch s.stat {
 	case tokNone:
 		if s.meta {
-			if err = s.cbAtom(s.charCount, false, MetaStr, false); err != nil {
-				return &ScanError{
-					pos: s.charCount,
-					msg: fmt.Sprintf("xsx push: atom '%s' meta=%t quoted=%t failed: %s",
-						s.token.String(),
-						false,
-						false,
-						err.Error()),
-					rsn: err}
+			if err = s.callAtom(s.charCount, false, MetaStr, false); err != nil {
+				return err
 			}
 		}
 	case tokChars:
-		if err = s.cbAtom(s.charCount, s.meta, s.token.String(), false); err != nil {
-			return &ScanError{
-				pos: s.charCount,
-				msg: fmt.Sprintf("xsx push: atom '%s' meta=%t quoted=%t failed: %s",
-					s.token.String(),
-					s.meta,
-					false,
-					err.Error()),
-				rsn: err}
+		if err = s.callAtom(s.charCount, s.meta, s.token.String(), false); err != nil {
+			return err
 		}
 	case tokStr:
 		err = &ScanError{
@@ -373,7 +316,8 @@ func (s *Scanner) Finish() (err error) {
 			msg: fmt.Sprintf("(%d):finish inside structure", s.charCount)}
 	}
 	if err == nil {
-		s.Reset()
+		s.stat = tokNone
+		s.meta = false
 	}
 	return err
 }
@@ -385,6 +329,7 @@ func (s *Scanner) Reset() {
 	s.strEsc = false
 	s.charCount = 0
 	s.meta = false
+	s.clearWs()
 }
 
 func (s *Scanner) PushString(txt string, final bool) error {
@@ -402,10 +347,14 @@ func (s *Scanner) PushString(txt string, final bool) error {
 }
 
 func (s *Scanner) Read(rd io.RuneReader, final bool) (err error) {
-	for c, _, err := rd.ReadRune(); err != nil; c, _, err = rd.ReadRune() {
-		if _, err := s.Push(c); err != nil {
+	var c rune
+	for c, _, err = rd.ReadRune(); err == nil; c, _, err = rd.ReadRune() {
+		if _, err = s.Push(c); err != nil {
 			return err
 		}
+	}
+	if err != io.EOF {
+		return err
 	}
 	if final {
 		if err := s.Finish(); err != nil {
@@ -413,6 +362,10 @@ func (s *Scanner) Read(rd io.RuneReader, final bool) (err error) {
 		}
 	}
 	return err
+}
+
+func (s *Scanner) Depth() int {
+	return len(s.nesting)
 }
 
 func (s *Scanner) nestPush(c rune) {
@@ -426,6 +379,53 @@ func (s *Scanner) nestPop() rune {
 	return res
 }
 
-func (s *Scanner) Depth() int {
-	return len(s.nesting)
+func (s *Scanner) callAtom(scnPos uint64, isMeta bool, atom string, quoted bool) error {
+	if err := s.cbAtom(scnPos, isMeta, atom, quoted); err != nil {
+		return &ScanError{
+			pos: s.charCount,
+			msg: fmt.Sprintf("xsx push: atom '%s' meta=%t quoted=%t failed: %s",
+				atom,
+				isMeta,
+				quoted,
+				err.Error()),
+			rsn: err}
+	}
+	return nil
+}
+
+func (s *Scanner) callBegin(scnPos uint64, isMeta bool, brace rune) error {
+	if err := s.cbBegin(scnPos, isMeta, brace); err != nil {
+		return &ScanError{
+			pos: scnPos,
+			msg: fmt.Sprintf("xsx psuh: begin '%c' meta=%t failed: %s",
+				brace,
+				isMeta,
+				err),
+			rsn: err}
+	}
+	return nil
+}
+
+func (s *Scanner) callEnd(scnPos uint64, brace rune) error {
+	if err := s.cbEnd(scnPos, brace); err != nil {
+		return &ScanError{
+			pos: scnPos,
+			msg: fmt.Sprintf("xsx push: end '%c' failed: %s",
+				brace,
+				err.Error()),
+			rsn: err}
+	}
+	return nil
+}
+
+func (s *Scanner) memWs(c rune) {
+	if s.WsBuf != nil {
+		s.WsBuf.WriteRune(c)
+	}
+}
+
+func (s *Scanner) clearWs() {
+	if s.WsBuf != nil {
+		s.WsBuf.Reset()
+	}
 }

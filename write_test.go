@@ -69,6 +69,4 @@ func ExamplePrinterPretty() {
 	p.End()
 	p.Atom("quux", true, Qforce)
 	p.End()
-	// Output:
-	// (foo\{"bar" \baz}\"quux")
 }

@@ -1,7 +1,8 @@
 # ![XSX-Logo](doc/xsx-logo.png?raw=true) – eXtended S-eXpressions
 
 Package XSX provides tools for parsing something I call eXtended
-S-eXpressions.  Extended means the following things:
+S-eXpressions.  Extended means the following things compared to
+[SEXP S-expressions](https://people.csail.mit.edu/rivest/sexp.html):
 
 1. Nested structures are delimited by balanced braces '()', '[]' or
    '{}’ – not only by '()'.
@@ -9,6 +10,10 @@ S-eXpressions.  Extended means the following things:
 2. XSX provides a notation for "Meta Values", i.e. XSXs that provide
    some sort of meta information that is not part of the "normal"
    data.
+
+On the other hand some properties from SEXP were dropped, e.g. typing
+of the so called "octet strings". Things like that are completely left
+to the application.
 
 ## Somewhat more formal description
 

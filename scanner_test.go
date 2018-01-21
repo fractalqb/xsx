@@ -5,18 +5,6 @@ import (
 	"testing"
 )
 
-func testBegin(scanPos uint64, meta bool, brace rune) error {
-	return nil
-}
-
-func testEnd(scanPos uint64, brace rune) error {
-	return nil
-}
-
-func testAtom(scanPos uint64, meta bool, atom string, quoted bool) error {
-	return nil
-}
-
 func exampleBegin(scanPos uint64, meta bool, brace rune) error {
 	_, err := fmt.Printf("begin: %t %c\n", meta, brace)
 	return err
@@ -36,7 +24,7 @@ func NewTestScanner(example bool) *Scanner {
 	if example {
 		return NewScanner(exampleBegin, exampleEnd, exampleAtom)
 	} else {
-		return NewScanner(testBegin, testEnd, testAtom)
+		return NewScanner(BeginNop, EndNop, AtomNop)
 	}
 }
 

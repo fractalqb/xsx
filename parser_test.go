@@ -1,7 +1,11 @@
 package xsx
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
+	"io"
+	"testing"
 )
 
 const (
@@ -131,4 +135,20 @@ func ExampleParserExample() {
 	//	if ok {
 	//		fmt.Println(tp.evtPtr)
 	//	}
+}
+
+func TestParserRead(t *testing.T) {
+	p := NewParser(NewTestParser(
+		EvtBeg('(', false),
+		EvtAtm("this", false, false),
+		EvtAtm("is", false, false),
+		EvtAtm("a", false, false),
+		EvtAtm("test", false, false),
+		EvtEnd(')'),
+	))
+	txt := bytes.NewBufferString("(this is a test)")
+	err := p.Read(bufio.NewReader(txt), true)
+	if err != io.EOF {
+		t.Error(err)
+	}
 }

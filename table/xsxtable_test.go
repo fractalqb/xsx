@@ -3,11 +3,13 @@ package table
 import (
 	"bufio"
 	"bytes"
+	"os"
 	"reflect"
 	"testing"
 
 	"github.com/fractalqb/xsx"
 	"github.com/fractalqb/xsx/gem"
+	"github.com/stvp/assert"
 )
 
 func pullStr(str string) *xsx.PullParser {
@@ -178,4 +180,16 @@ func TestNextRow(t *testing.T) {
 	if err != xsx.PullEOI {
 		t.Error("expected EOI, got", err)
 	}
+}
+
+func TestReadUnicode(t *testing.T) {
+	tstf, err := os.Open("tst/utf8.xsx")
+	assert.Nil(t, err)
+	defer tstf.Close()
+	pp := xsx.NewPullParser(bufio.NewReader(tstf))
+	tdef, err := ReadDef(pp)
+	assert.Nil(t, err)
+	row, err := tdef.NextRow(pp, nil)
+	assert.Nil(t, err)
+	assert.Equal(t, "äöüß", (row[1]).(*gem.Atom).Str)
 }

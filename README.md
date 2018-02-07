@@ -45,7 +45,7 @@ Each atom is an XSX. From XSX one can build sequences:
     seq1 ::= '(' ')' | '(' xsxs ')'
     seq2 ::= '[' ']' | '[' xsxs ']'
     seq3 ::= '{' '}' | '{' xsxs '}'
-	XSX  ::= seq1 | seq2 | seq3
+    XSX  ::= atom | seq1 | seq2 | seq3
 
 ### Out-Of-Band Information with Meta XSXs
 

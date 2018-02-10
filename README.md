@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/fractalqb/xsx.svg)](https://travis-ci.org/fractalqb/xsx)
+
 # ![XSX-Logo](doc/xsx-logo.png?raw=true) – eXtended S-eXpressions
 
 Package XSX provides tools for parsing something I call eXtended

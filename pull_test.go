@@ -14,9 +14,8 @@ import (
 // TokBegin: bracket rune, meta bool
 // TokEnd: bracket rune
 // TokAtom: atom string, meta bool, quoted bool
-func assertNextTok(t *testing.T, expect Token, pp *PullParser, tokDtls ...interface{}) {
-	got, err := pp.Next()
-	assert.Nil(t, err)
+func assertThisTok(t *testing.T, expect Token, pp *PullParser, tokDtls ...interface{}) {
+	got := pp.LastToken()
 	assert.Equal(t, expect, got, expect, " ≠ ", got)
 	switch expect {
 	case TokEOI:
@@ -32,6 +31,12 @@ func assertNextTok(t *testing.T, expect Token, pp *PullParser, tokDtls ...interf
 	default:
 		t.Fatalf("illegal expected token: %v", expect)
 	}
+}
+
+func assertNextTok(t *testing.T, expect Token, pp *PullParser, tokDtls ...interface{}) {
+	_, err := pp.Next()
+	assert.Nil(t, err)
+	assertThisTok(t, expect, pp, tokDtls...)
 }
 
 func testOBrackets(t *testing.T, bracket rune, tok Token) {
@@ -87,6 +92,21 @@ func TestPullParser_general(t *testing.T) {
 	assertNextTok(t, TokAtom, pp, "bar", false, true)
 	assertNextTok(t, TokEnd, pp, ']')
 	assertNextTok(t, TokEnd, pp, ')')
+	assertNextTok(t, TokEOI, pp)
+}
+
+func TestPullParser_SkipMeta(t *testing.T) {
+	in := bytes.NewBuffer([]byte("foo ( bar \\quux \\[das wird überspringen]) baz"))
+	pp := NewPullParser(bufio.NewReader(in))
+	assertNextTok(t, TokAtom, pp, "foo", false, false)
+	assertNextTok(t, TokBegin, pp, '(', false)
+	assertNextTok(t, TokAtom, pp, "bar", false, false)
+	assertNextTok(t, TokAtom, pp, "quux", true, false)
+	pp.SkipMeta()
+	assertNextTok(t, TokBegin, pp, '[', true)
+	pp.SkipMeta()
+	assertNextTok(t, TokEnd, pp, ')')
+	assertNextTok(t, TokAtom, pp, "baz", false, false)
 	assertNextTok(t, TokEOI, pp)
 }
 

@@ -86,8 +86,19 @@ func (tdef Definition) NextRow(xrd *xsx.PullParser, row []gem.Expr) ([]gem.Expr,
 	if row == nil || len(row) < len(tdef) || 3*len(row) < cap(row) {
 		row = make([]gem.Expr, len(tdef))
 	}
-	if err := xrd.NextBegin("(", xsx.NoMeta); err == xsx.PullEOI {
-		return nil, xsx.PullEOI
+	for {
+		if err := xrd.NextBegin("(", xsx.AllowMeta); err == xsx.PullEOI {
+			return nil, xsx.PullEOI
+		} else if err != nil {
+			return nil, err
+		}
+		if xrd.WasMeta() {
+			if err := xrd.SkipMeta(); err != nil {
+				return nil, err
+			}
+		} else {
+			break
+		}
 	}
 	for i := 0; i < len(tdef); i++ {
 		elem, err := gem.ReadNext(xrd)

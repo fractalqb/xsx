@@ -182,6 +182,27 @@ func TestNextRow(t *testing.T) {
 	}
 }
 
+func TestSkipMetaRow(t *testing.T) {
+	input := pullStr(`[(foo int) bar (baz bool)]
+	(1 "word 1" false)
+	\(this is a skipped row used as a comment)
+	(2 "word 2" true)`)
+	tdef, err := ReadDef(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	row, err := tdef.NextRow(input, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, "1", row[0].(*gem.Atom).Str)
+	row, err = tdef.NextRow(input, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, "2", row[0].(*gem.Atom).Str)
+}
+
 func TestReadUnicode(t *testing.T) {
 	tstf, err := os.Open("tst/utf8.xsx")
 	assert.Nil(t, err)

@@ -143,6 +143,38 @@ func (p *PullParser) WasMeta() bool {
 	return p.toks[p.tokRd-1].meta
 }
 
+// SkipMeta skips all tokens that are part of the current meta XSX, if so.
+// If the last token was not meta, nothing is skipped. Otherwise SkipMeta stops
+// at the last token of the current meta.
+func (p *PullParser) SkipMeta() (err error) {
+	if !p.WasMeta() {
+		return nil
+	}
+	switch p.LastToken() {
+	case TokAtom:
+		return nil
+	case TokBegin:
+		depth := 1
+		for depth > 0 {
+			tok, err := p.Next()
+			if err != nil {
+				return err
+			}
+			switch tok {
+			case TokBegin:
+				depth++
+			case TokEnd:
+				depth--
+			case TokEOI:
+				return PullEOI
+			}
+		}
+		return nil
+	default:
+		panic("unreachable code")
+	}
+}
+
 func (p *PullParser) WasAny(joinToken Token) Token {
 	return joinToken & p.LastToken()
 }

@@ -56,15 +56,16 @@ type Brace int
 
 const (
 	Undef  Brace = 0
-	Paren  Brace = 1 << 1
-	Square Brace = 2 << 1
-	Curly  Brace = 3 << 1
+	Paren  Brace = 1 << 0
+	Square Brace = 1 << 1
+	Curly  Brace = 1 << 2
 )
 
-const braceMask = 3 << 1
+const braceShift = 2
+const braceMask = 7 << braceShift
 
-var barceOpen = []rune{0, '(', '[', '{'}
-var barceClose = []rune{0, ')', ']', '}'}
+var barceOpen = []rune{0, '(', '[', 0, '{'}
+var barceClose = []rune{0, ')', ']', 0, '}'}
 
 func FromRune(c rune) Brace {
 	switch c {
@@ -79,25 +80,33 @@ func FromRune(c rune) Brace {
 	}
 }
 
-func (b Brace) Opening() rune {
-	if b < 1 || b > 3 {
+func (b Brace) Opening() (res rune) {
+	if b < 1 || b > 4 {
 		panic(fmt.Sprintf("not a valid xsx brace: '%d'", int(b)))
 	}
-	return barceOpen[b]
+	res = barceOpen[b]
+	if res == 0 {
+		panic(fmt.Sprintf("not a valid xsx brace: '%d'", int(b)))
+	}
+	return res
 }
 
-func (b Brace) Closing() rune {
-	if b < 1 || b > 3 {
+func (b Brace) Closing() (res rune) {
+	if b < 1 || b > 4 {
 		panic(fmt.Sprintf("not a valid xsx brace: '%d'", int(b)))
 	}
-	return barceClose[b]
+	res = barceClose[b]
+	if res == 0 {
+		panic(fmt.Sprintf("not a valid xsx brace: '%d'", int(b)))
+	}
+	return res
 }
 
 func (s *Sequence) Brace() Brace {
-	return Brace(s.expBase & braceMask)
+	return Brace((s.expBase & braceMask) >> braceShift)
 }
 
 func (s *Sequence) SetBrace(b Brace) {
 	clear := s.expBase & ^braceMask
-	s.expBase = clear | (expBase(b) & braceMask)
+	s.expBase = clear | ((expBase(b) << braceShift) & braceMask)
 }

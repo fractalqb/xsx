@@ -21,7 +21,7 @@ func Print(pr xsx.Printer, xpr Expr) (err error) {
 		case Curly:
 			pr.Begin('{', expr.Meta())
 		default:
-			pr.Begin('(', expr.Meta())
+			pr.Begin('(', expr.Meta()) // be forgiving
 		}
 		for _, sub := range expr.Elems {
 			Print(pr, sub)

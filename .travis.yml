@@ -3,5 +3,8 @@ language: go
 go:
   - 1.9.x
 
+install:
+  - go get github.com/stvp/assert
+  
 script: go test -v ./...
 

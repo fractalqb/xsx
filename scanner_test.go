@@ -5,17 +5,17 @@ import (
 	"testing"
 )
 
-func exampleBegin(scanPos uint64, meta bool, brace rune) error {
+func exampleBegin(meta bool, brace rune) error {
 	_, err := fmt.Printf("begin: %t %c\n", meta, brace)
 	return err
 }
 
-func exampleEnd(scanPos uint64, brace rune) error {
+func exampleEnd(brace rune) error {
 	_, err := fmt.Printf("end: %c\n", brace)
 	return err
 }
 
-func exampleAtom(scanPos uint64, meta bool, atom string, quoted bool) error {
+func exampleAtom(meta bool, atom string, quoted bool) error {
 	_, err := fmt.Printf("atom: %t [%s] %t\n", meta, atom, quoted)
 	return err
 }
@@ -154,8 +154,19 @@ func TestUnbalanced(t *testing.T) {
 		t.Error("expected unbalanced bracing error, got no error")
 	} else if scnErr := err.(*ScanError); scnErr == nil {
 		t.Errorf("expected unbalanced bracing error, got: %s", err)
-	} else if scnErr.Position() != 2 {
-		t.Errorf("unbalanced bracing in wrong position: %d", scnErr.Position())
+	} else {
+		if scnErr.Position() != 2 {
+			t.Errorf("unbalanced bracing in wrong position: %d", scnErr.Position())
+		}
+		if scnErr.Message() != "unbalanced bracing: }, expected )" {
+			t.Error(scnErr.Message())
+		}
+		if scnErr.Error() != "@2:unbalanced bracing: }, expected )" {
+			t.Error(scnErr.Error())
+		}
+		if scnErr.Reason() != nil {
+			t.Errorf("unexpected error reason: %s", scnErr.Reason())
+		}
 	}
 }
 
@@ -181,6 +192,27 @@ func TestPrematureEndOfString(t *testing.T) {
 	} else if scnErr.pos != 4 {
 		t.Errorf("scan error in wrong position: %d", scnErr.Position())
 	}
+}
+
+func beginFail(isMeta bool, brace rune) error {
+	return fmt.Errorf("begin fails with meta=%t brace=%c", isMeta, brace)
+}
+
+func TestScanFailOnBegin(t *testing.T) {
+	p := NewScanner(beginFail, EndNop, AtomNop)
+	err := p.PushString(" (", false)
+	if err == nil {
+		t.Error("expected error, got none")
+	}
+	if err.Error() != "@2:xsx push: begin '(' meta=false failed: begin fails with meta=false brace=(" {
+		t.Errorf("unexpected error message: '%s'", err.Error())
+	}
+}
+
+func ExampleNopFuns() {
+	p := NewTestScanner(false)
+	p.PushString("(x)", true)
+	// Output:
 }
 
 func ExampleMetaAtom() {

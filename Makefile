@@ -7,5 +7,5 @@ coverage.html: coverage.out
 	go tool cover -html=$< -o $@
 
 coverage.out: $(GOSRC)
-	go test -coverprofile=$@ || true
+	go test -coverprofile=$@ ./... || true
 #	go test -covermode=count -coverprofile=$@ || true

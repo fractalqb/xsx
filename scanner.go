@@ -27,7 +27,7 @@ type ScanError struct {
 }
 
 func (err *ScanError) Error() string {
-	return fmt.Sprintf("%d:%s", err.pos, err.msg)
+	return fmt.Sprintf("@%d:%s", err.pos, err.msg)
 }
 
 func (err *ScanError) Position() uint64 {
@@ -43,25 +43,28 @@ func (err *ScanError) Reason() error {
 }
 
 // BeginFunc is called by Scanner when an opening bracked is detected.
-type BeginFunc func(scnPos uint64, isMeta bool, brace rune) error
+type BeginFunc func(isMeta bool, brace rune) error
 
-func BeginNop(scnPos uint64, isMeta bool, brace rune) error {
+// BeginNop performs No OPeration on begin event
+func BeginNop(isMeta bool, brace rune) error {
 	return nil
 }
 
 // EndFunc is called by Scanner when a closing bracked is detected that matches
 // the correspondig opening bracked. For not matching bracktes Scanner.Next
 // returns a ScanError before EndFunc would have been called.
-type EndFunc func(scnPos uint64, brace rune) error
+type EndFunc func(brace rune) error
 
-func EndNop(scnPos uint64, brace rune) error {
+// EndNop performs No OPeration on end event
+func EndNop(brace rune) error {
 	return nil
 }
 
 // AtomFunc is called by Scanner when an XSX atom is detected.
-type AtomFunc func(scnPos uint64, isMeta bool, atom string, quoted bool) error
+type AtomFunc func(isMeta bool, atom string, quoted bool) error
 
-func AtomNop(scnPos uint64, isMeta bool, atom string, quoted bool) error {
+// AtomNop performs No OPeration on atom event
+func AtomNop(isMeta bool, atom string, quoted bool) error {
 	return nil
 }
 
@@ -98,28 +101,28 @@ func (s *Scanner) Push(c rune) (done bool, err error) {
 		switch c {
 		case '(':
 			s.nestPush(')')
-			if err = s.callBegin(s.charCount, s.meta, '('); err != nil {
+			if err = s.callBegin(s.meta, '('); err != nil {
 				return true, err
 			}
 			s.meta = false
 			s.clearWs()
 		case '[':
 			s.nestPush(']')
-			if err = s.callBegin(s.charCount, s.meta, '['); err != nil {
+			if err = s.callBegin(s.meta, '['); err != nil {
 				return true, err
 			}
 			s.meta = false
 			s.clearWs()
 		case '{':
 			s.nestPush('}')
-			if err = s.callBegin(s.charCount, s.meta, '{'); err != nil {
+			if err = s.callBegin(s.meta, '{'); err != nil {
 				return true, err
 			}
 			s.meta = false
 			s.clearWs()
 		case ')', ']', '}':
 			if s.meta {
-				if err = s.callAtom(s.charCount, false, MetaStr, false); err != nil {
+				if err = s.callAtom(false, MetaStr, false); err != nil {
 					return true, err
 				}
 				s.token.Reset()
@@ -129,19 +132,16 @@ func (s *Scanner) Push(c rune) (done bool, err error) {
 			if s.Depth() == 0 {
 				return true, &ScanError{
 					pos: s.charCount,
-					msg: fmt.Sprintf("closing bracket '%c' at top level",
-						c)}
+					msg: fmt.Sprintf("closing bracket '%c' at top level", c),
+				}
 			}
 			if e := s.nestPop(); e != c {
 				return true, &ScanError{
 					pos: s.charCount,
-					msg: fmt.Sprintf(
-						"(%d):unbalanced bracing: %c, expected %c",
-						s.charCount,
-						c,
-						e)}
+					msg: fmt.Sprintf("unbalanced bracing: %c, expected %c", c, e),
+				}
 			}
-			if err = s.callEnd(s.charCount, c); err != nil {
+			if err = s.callEnd(c); err != nil {
 				return true, err
 			}
 			s.clearWs()
@@ -161,7 +161,7 @@ func (s *Scanner) Push(c rune) (done bool, err error) {
 				s.token.WriteRune(c)
 			} else {
 				if s.meta {
-					if err = s.callAtom(s.charCount, false, MetaStr, false); err != nil {
+					if err = s.callAtom(false, MetaStr, false); err != nil {
 						return true, err
 					}
 					s.token.Reset()
@@ -174,7 +174,7 @@ func (s *Scanner) Push(c rune) (done bool, err error) {
 	case tokChars:
 		switch c {
 		case '(':
-			if err = s.callAtom(s.charCount, s.meta, s.token.String(), false); err != nil {
+			if err = s.callAtom(s.meta, s.token.String(), false); err != nil {
 				return true, err
 			}
 			s.token.Reset()
@@ -182,11 +182,11 @@ func (s *Scanner) Push(c rune) (done bool, err error) {
 			s.stat = tokNone
 			s.nestPush(')')
 			s.clearWs()
-			if err = s.callBegin(s.charCount, s.meta, '('); err != nil {
+			if err = s.callBegin(s.meta, '('); err != nil {
 				return true, err
 			}
 		case '[':
-			if err = s.callAtom(s.charCount, s.meta, s.token.String(), false); err != nil {
+			if err = s.callAtom(s.meta, s.token.String(), false); err != nil {
 				return true, err
 			}
 			s.token.Reset()
@@ -194,11 +194,11 @@ func (s *Scanner) Push(c rune) (done bool, err error) {
 			s.stat = tokNone
 			s.nestPush(']')
 			s.clearWs()
-			if err = s.callBegin(s.charCount, s.meta, '['); err != nil {
+			if err = s.callBegin(s.meta, '['); err != nil {
 				return true, err
 			}
 		case '{':
-			if err = s.callAtom(s.charCount, s.meta, s.token.String(), false); err != nil {
+			if err = s.callAtom(s.meta, s.token.String(), false); err != nil {
 				return true, err
 			}
 			s.token.Reset()
@@ -206,11 +206,11 @@ func (s *Scanner) Push(c rune) (done bool, err error) {
 			s.stat = tokNone
 			s.nestPush('}')
 			s.clearWs()
-			if err = s.callBegin(s.charCount, s.meta, '{'); err != nil {
+			if err = s.callBegin(s.meta, '{'); err != nil {
 				return true, err
 			}
 		case ')', ']', '}':
-			if err = s.callAtom(s.charCount, s.meta, s.token.String(), false); err != nil {
+			if err = s.callAtom(s.meta, s.token.String(), false); err != nil {
 				return true, err
 			}
 			s.token.Reset()
@@ -220,23 +220,21 @@ func (s *Scanner) Push(c rune) (done bool, err error) {
 			if s.Depth() == 0 {
 				return true, &ScanError{
 					pos: s.charCount,
-					msg: fmt.Sprintf("xsx push: closing bracket '%c' at top level",
-						c)}
+					msg: fmt.Sprintf("xsx push: closing bracket '%c' at top level", c),
+				}
 			}
 			if e := s.nestPop(); e != c {
 				return true, &ScanError{
 					pos: s.charCount,
-					msg: fmt.Sprintf(
-						"unbalanced bracing: %c, expected %c",
-						c,
-						e)}
+					msg: fmt.Sprintf("unbalanced bracing: %c, expected %c", c, e),
+				}
 			}
-			if err = s.callEnd(s.charCount, c); err != nil {
+			if err = s.callEnd(c); err != nil {
 				return true, err
 			}
 			done = s.Depth() == 0
 		case '"':
-			if err = s.callAtom(s.charCount, s.meta, s.token.String(), false); err != nil {
+			if err = s.callAtom(s.meta, s.token.String(), false); err != nil {
 				return true, err
 			}
 			s.token.Reset()
@@ -244,7 +242,7 @@ func (s *Scanner) Push(c rune) (done bool, err error) {
 			s.stat = tokStr
 			s.clearWs()
 		case Meta:
-			if err = s.callAtom(s.charCount, s.meta, s.token.String(), false); err != nil {
+			if err = s.callAtom(s.meta, s.token.String(), false); err != nil {
 				return true, err
 			}
 			s.token.Reset()
@@ -253,7 +251,7 @@ func (s *Scanner) Push(c rune) (done bool, err error) {
 			s.clearWs()
 		default:
 			if unicode.IsSpace(c) {
-				if err = s.callAtom(s.charCount, s.meta, s.token.String(), false); err != nil {
+				if err = s.callAtom(s.meta, s.token.String(), false); err != nil {
 					return true, err
 				}
 				s.token.Reset()
@@ -273,7 +271,7 @@ func (s *Scanner) Push(c rune) (done bool, err error) {
 		} else {
 			switch c {
 			case '"':
-				if err = s.callAtom(s.charCount, s.meta, s.token.String(), true); err != nil {
+				if err = s.callAtom(s.meta, s.token.String(), true); err != nil {
 					return true, err
 				}
 				s.token.Reset()
@@ -296,24 +294,26 @@ func (s *Scanner) Finish() (err error) {
 	switch s.stat {
 	case tokNone:
 		if s.meta {
-			if err = s.callAtom(s.charCount, false, MetaStr, false); err != nil {
+			if err = s.callAtom(false, MetaStr, false); err != nil {
 				return err
 			}
 		}
 	case tokChars:
-		if err = s.callAtom(s.charCount, s.meta, s.token.String(), false); err != nil {
+		if err = s.callAtom(s.meta, s.token.String(), false); err != nil {
 			return err
 		}
 	case tokStr:
 		err = &ScanError{
 			pos: s.charCount,
-			msg: fmt.Sprintf("(%d):finish inside quoted atom", s.charCount)}
+			msg: "finish inside quoted atom",
+		}
 		return err
 	}
 	if s.Depth() > 0 {
 		err = &ScanError{
 			pos: s.charCount,
-			msg: fmt.Sprintf("(%d):finish inside structure", s.charCount)}
+			msg: "finish inside structure",
+		}
 	}
 	if err == nil {
 		s.stat = tokNone
@@ -379,8 +379,8 @@ func (s *Scanner) nestPop() rune {
 	return res
 }
 
-func (s *Scanner) callAtom(scnPos uint64, isMeta bool, atom string, quoted bool) error {
-	if err := s.cbAtom(scnPos, isMeta, atom, quoted); err != nil {
+func (s *Scanner) callAtom(isMeta bool, atom string, quoted bool) error {
+	if err := s.cbAtom(isMeta, atom, quoted); err != nil {
 		return &ScanError{
 			pos: s.charCount,
 			msg: fmt.Sprintf("xsx push: atom '%s' meta=%t quoted=%t failed: %s",
@@ -393,11 +393,11 @@ func (s *Scanner) callAtom(scnPos uint64, isMeta bool, atom string, quoted bool)
 	return nil
 }
 
-func (s *Scanner) callBegin(scnPos uint64, isMeta bool, brace rune) error {
-	if err := s.cbBegin(scnPos, isMeta, brace); err != nil {
+func (s *Scanner) callBegin(isMeta bool, brace rune) error {
+	if err := s.cbBegin(isMeta, brace); err != nil {
 		return &ScanError{
-			pos: scnPos,
-			msg: fmt.Sprintf("xsx psuh: begin '%c' meta=%t failed: %s",
+			pos: s.charCount,
+			msg: fmt.Sprintf("xsx push: begin '%c' meta=%t failed: %s",
 				brace,
 				isMeta,
 				err),
@@ -406,10 +406,10 @@ func (s *Scanner) callBegin(scnPos uint64, isMeta bool, brace rune) error {
 	return nil
 }
 
-func (s *Scanner) callEnd(scnPos uint64, brace rune) error {
-	if err := s.cbEnd(scnPos, brace); err != nil {
+func (s *Scanner) callEnd(brace rune) error {
+	if err := s.cbEnd(brace); err != nil {
 		return &ScanError{
-			pos: scnPos,
+			pos: s.charCount,
 			msg: fmt.Sprintf("xsx push: end '%c' failed: %s",
 				brace,
 				err.Error()),

@@ -53,7 +53,7 @@ type PullParser struct {
 func NewPullParser(rd *bufio.Reader) *PullParser {
 	res := &PullParser{rd: rd}
 	scn := NewScanner(
-		func(scnPos uint64, isMeta bool, bracket rune) error {
+		func(isMeta bool, bracket rune) error {
 			ti := &res.toks[res.tokWr]
 			ti.tok = TokBegin
 			ti.bracket = bracket
@@ -61,7 +61,7 @@ func NewPullParser(rd *bufio.Reader) *PullParser {
 			res.tokWr++
 			return nil
 		},
-		func(scnPos uint64, bracket rune) error {
+		func(bracket rune) error {
 			ti := &res.toks[res.tokWr]
 			ti.tok = TokEnd
 			ti.bracket = bracket
@@ -72,7 +72,7 @@ func NewPullParser(rd *bufio.Reader) *PullParser {
 			}
 			return nil
 		},
-		func(scnPos uint64, isMeta bool, atom string, quoted bool) error {
+		func(isMeta bool, atom string, quoted bool) error {
 			ti := &res.toks[res.tokWr]
 			ti.tok = TokAtom
 			ti.meta = isMeta

@@ -53,71 +53,64 @@ func (p *TestParser) checkEvtPtr() (err error) {
 	return err
 }
 
-func (p *TestParser) Begin(scanPos uint64, isMeta bool, brace rune) (err error) {
+func (p *TestParser) Begin(isMeta bool, brace rune) (err error) {
 	p.checkEvtPtr()
 	xpct := p.events[p.evtPtr]
 	p.evtPtr++
 	if xpct.sTok != scnBegin {
-		err = fmt.Errorf("@%d:wrong scanner event: %s, expetced %s",
-			scanPos,
+		err = fmt.Errorf("wrong scanner event: %s, expetced %s",
 			scnNames[scnBegin],
 			scnNames[xpct.sTok])
 	}
 	if xpct.tok != string(brace) {
-		err = fmt.Errorf("@%d:wrong brace: %c, expected %s",
-			scanPos,
+		err = fmt.Errorf("wrong brace: %c, expected %s",
 			brace,
 			xpct.tok)
 	}
 	if xpct.meta != isMeta {
-		err = fmt.Errorf("@%d:wrong meta on %c: %t", scanPos, brace, isMeta)
+		err = fmt.Errorf("wrong meta on %c: %t", brace, isMeta)
 	}
 	return err
 }
 
-func (p *TestParser) End(scanPos uint64, brace rune) (err error) {
+func (p *TestParser) End(brace rune) (err error) {
 	p.checkEvtPtr()
 	xpct := p.events[p.evtPtr]
 	p.evtPtr++
 	if xpct.sTok != scnEnd {
-		err = fmt.Errorf("@%d:wrong scanner event: %s, expetced %s",
-			scanPos,
+		err = fmt.Errorf("wrong scanner event: %s, expetced %s",
 			scnNames[scnEnd],
 			scnNames[xpct.sTok])
 	}
 	if xpct.tok != string(brace) {
-		err = fmt.Errorf("@%d:wrong brace: %c, expected %s",
-			scanPos,
+		err = fmt.Errorf("wrong brace: %c, expected %s",
 			brace,
 			xpct.tok)
 	}
 	return err
 }
 
-func (p *TestParser) Atom(scanPos uint64, isMeta bool, atom string, quoted bool) (err error) {
+func (p *TestParser) Atom(isMeta bool, atom string, quoted bool) (err error) {
 	p.checkEvtPtr()
 	xpct := p.events[p.evtPtr]
 	p.evtPtr++
 	if xpct.sTok != scnAtom {
-		err = fmt.Errorf("@%d:wrong scanner event: %s, expetced %s",
-			scanPos,
+		err = fmt.Errorf("wrong scanner event: %s, expetced %s",
 			scnNames[scnAtom],
 			scnNames[xpct.sTok])
 	}
 	if xpct.tok != atom {
-		err = fmt.Errorf("@%d:wrong atom: %s, expected %s",
-			scanPos,
+		err = fmt.Errorf("wrong atom: %s, expected %s",
 			atom,
 			xpct.tok)
 	}
 	if xpct.quot != quoted {
-		err = fmt.Errorf("@%d:wrong quotation for atom '%s': %t",
-			scanPos,
+		err = fmt.Errorf("wrong quotation for atom '%s': %t",
 			atom,
 			quoted)
 	}
 	if xpct.meta != isMeta {
-		err = fmt.Errorf("@%d:wrong meta for atom '%s': %t", scanPos, atom, isMeta)
+		err = fmt.Errorf("wrong meta for atom '%s': %t", atom, isMeta)
 	}
 	return err
 }

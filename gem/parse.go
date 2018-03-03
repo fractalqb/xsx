@@ -5,7 +5,7 @@ type State struct {
 	ctx     []*Sequence
 }
 
-func (pst *State) Begin(scanPos uint64, isMeta bool, brace rune) error {
+func (pst *State) Begin(isMeta bool, brace rune) error {
 	s := &Sequence{}
 	s.SetMeta(isMeta)
 	s.SetBrace(FromRune(brace))
@@ -17,7 +17,7 @@ func (pst *State) Begin(scanPos uint64, isMeta bool, brace rune) error {
 	return nil
 }
 
-func (pst *State) End(scanPos uint64, brace rune) error {
+func (pst *State) End(brace rune) error {
 	lm1 := len(pst.ctx) - 1
 	s := pst.ctx[lm1]
 	pst.ctx = pst.ctx[:lm1]
@@ -27,7 +27,7 @@ func (pst *State) End(scanPos uint64, brace rune) error {
 	return nil
 }
 
-func (pst *State) Atom(scanPos uint64, isMeta bool, atom string, quoted bool) error {
+func (pst *State) Atom(isMeta bool, atom string, quoted bool) error {
 	a := &Atom{Str: atom}
 	a.SetMeta(isMeta)
 	a.SetQuoted(quoted)

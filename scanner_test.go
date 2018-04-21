@@ -199,14 +199,30 @@ func beginFail(isMeta bool, brace rune) error {
 }
 
 func TestScanFailOnBegin(t *testing.T) {
-	p := NewScanner(beginFail, EndNop, AtomNop)
-	err := p.PushString(" (", false)
-	if err == nil {
-		t.Error("expected error, got none")
+	for _, xsx := range []string{"(", "[", "{"} {
+		p := NewScanner(beginFail, EndNop, AtomNop)
+		err := p.PushString(xsx, false)
+		if err == nil {
+			t.Error("expected error, got none")
+		}
+		if err.Error() != "@1:xsx push: begin '"+xsx+"' meta=false failed: begin fails with meta=false brace="+xsx {
+			t.Errorf("unexpected error message: '%s'", err.Error())
+		}
 	}
-	if err.Error() != "@2:xsx push: begin '(' meta=false failed: begin fails with meta=false brace=(" {
-		t.Errorf("unexpected error message: '%s'", err.Error())
+}
+
+func ExampleScanEndFromNoToken() {
+	for _, xsx := range []string{"( )", "[ ]", "{ }"} {
+		p := NewScanner(exampleBegin, exampleEnd, exampleAtom)
+		p.PushString(xsx, true)
 	}
+	// Output:
+	// begin: false (
+	// end: )
+	// begin: false [
+	// end: ]
+	// begin: false {
+	// end: }
 }
 
 func ExampleNopFuns() {

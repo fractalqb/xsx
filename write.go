@@ -106,6 +106,8 @@ type B rune
 type Bm rune
 type printEnd int
 
+// End is passed to the Print function to end the current structure. Print
+// will choose the correct bracket to keep them balanced.
 const End printEnd = printEnd(0)
 
 type Nl struct {

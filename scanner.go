@@ -8,7 +8,9 @@ import (
 )
 
 const (
+	// Meta is the rune used as escape for meta expressions.
 	Meta    = '\\'
+	// MetaStr is the string variant of the Meta rune.
 	MetaStr = string(Meta)
 )
 
@@ -42,20 +44,20 @@ func (err *ScanError) Reason() error {
 	return err.rsn
 }
 
-// BeginFunc is called by Scanner when an opening bracked is detected.
+// BeginFunc is called by Scanner when an opening bracket is detected.
 type BeginFunc func(isMeta bool, brace rune) error
 
-// BeginNop performs No OPeration on begin event
+// BeginNop performs No OPeration on begin event.
 func BeginNop(isMeta bool, brace rune) error {
 	return nil
 }
 
-// EndFunc is called by Scanner when a closing bracked is detected that matches
-// the correspondig opening bracked. For not matching bracktes Scanner.Next
+// EndFunc is called by Scanner when a closing bracket is detected that matches
+// the corresponding opening bracket. For non-matching brackets Scanner.Next
 // returns a ScanError before EndFunc would have been called.
 type EndFunc func(brace rune) error
 
-// EndNop performs No OPeration on end event
+// EndNop performs No OPeration on end event.
 func EndNop(brace rune) error {
 	return nil
 }
@@ -63,7 +65,7 @@ func EndNop(brace rune) error {
 // AtomFunc is called by Scanner when an XSX atom is detected.
 type AtomFunc func(isMeta bool, atom string, quoted bool) error
 
-// AtomNop performs No OPeration on atom event
+// AtomNop performs No OPeration on atom event.
 func AtomNop(isMeta bool, atom string, quoted bool) error {
 	return nil
 }
@@ -73,8 +75,11 @@ type Scanner struct {
 	cbBegin BeginFunc
 	cbEnd   EndFunc
 	cbAtom  AtomFunc
-
-	WsBuf     *bytes.Buffer // TODO opt. collect whitespace
+	// WsBuf can be set to point to a bytes.Buffer to let the scanner all white
+	// space that precedes a detected token. If WsBuf is set to nil the scanner
+	// completely ignores white space. This can be useful when the scanner must
+	// reconstruct the white space of the input.
+	WsBuf     *bytes.Buffer
 	charCount uint64
 	stat      scanStat
 	strEsc    bool
@@ -83,6 +88,12 @@ type Scanner struct {
 	token     bytes.Buffer
 }
 
+// NewScanner creates a new XSX scanner that on scanning an opening bracket, a
+// closing bracket or an XSX atom calls beginCallback, endCallback or
+// atomCallback respectively. The scanner will check for brackets to be lanaced,
+// i.e. an open brace is matched with a closing brace, opening square brackets
+// are closed with closing square brakcets and opeing curly brackets are closed
+// with closing curly brackets.
 func NewScanner(
 	beginCallback BeginFunc,
 	endCallback EndFunc,

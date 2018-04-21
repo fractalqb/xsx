@@ -25,7 +25,10 @@ func (s *WsScan) atom(meta bool, atom string, quoted bool) error {
 
 func ExampleWsBuf_wsBeforeAtom() {
 	wsc := bytes.NewBuffer(nil)
-	scn := NewScanner((*WsScan)(wsc).begin, (*WsScan)(wsc).end, (*WsScan)(wsc).atom)
+	scn := NewScanner(
+		(*WsScan)(wsc).begin,
+		(*WsScan)(wsc).end,
+		(*WsScan)(wsc).atom)
 	scn.WsBuf = wsc
 	scn.PushString("  foo", true)
 	// Output:
@@ -34,7 +37,10 @@ func ExampleWsBuf_wsBeforeAtom() {
 
 func ExampleWsBuf_wsAfterAtom() {
 	wsc := bytes.NewBuffer(nil)
-	scn := NewScanner((*WsScan)(wsc).begin, (*WsScan)(wsc).end, (*WsScan)(wsc).atom)
+	scn := NewScanner(
+		(*WsScan)(wsc).begin,
+		(*WsScan)(wsc).end,
+		(*WsScan)(wsc).atom)
 	scn.WsBuf = wsc
 	scn.PushString("foo  ", true)
 	fmt.Printf("ws: (%s)", wsc.String())

@@ -51,7 +51,7 @@ type Sequence struct {
 	Elems []Expr
 }
 
-//go:generate -type=Brace
+//go:generate stringer -type Brace
 type Brace int
 
 const (

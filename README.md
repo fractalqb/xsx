@@ -61,7 +61,7 @@ E.g. `\4711` is a meta-atom and `\{foo 1 bar false baz 3.1415}` is a
 meta-sequence. What _meta_ means is completely up to the
 application. Imagine e.g. `(div hiho)` and `(div \{class green} hiho)`
 to be a translation from `<div>hiho</div>` and `<div
-class="gree">hiho</div>`.
+class="green">hiho</div>`.
 
 ## Rationale
 

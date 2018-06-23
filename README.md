@@ -1,6 +1,9 @@
+# ![XSX-Logo](doc/xsx-logo.png?raw=true) – eXtended S-eXpressions
 [![Build Status](https://travis-ci.org/fractalqb/xsx.svg)](https://travis-ci.org/fractalqb/xsx)
 
-# ![XSX-Logo](doc/xsx-logo.png?raw=true) – eXtended S-eXpressions
+`import "git.fractalqb.de/fractalqb/xsx"`
+
+---
 
 Package XSX provides tools for parsing something I call eXtended
 S-eXpressions.  Extended means the following things compared to

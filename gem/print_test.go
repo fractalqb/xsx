@@ -3,7 +3,7 @@ package gem
 import (
 	"os"
 
-	"github.com/fractalqb/xsx"
+	"git.fractalqb.de/fractalqb/xsx"
 )
 
 func ExamplePrint_atom() {

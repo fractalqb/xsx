@@ -7,8 +7,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/fractalqb/xsx"
-	"github.com/fractalqb/xsx/gem"
+	"git.fractalqb.de/fractalqb/xsx"
+	"git.fractalqb.de/fractalqb/xsx/gem"
 	"github.com/stvp/assert"
 )
 

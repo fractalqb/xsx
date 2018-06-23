@@ -3,7 +3,7 @@ package gem
 import (
 	"testing"
 
-	"github.com/fractalqb/xsx"
+	"git.fractalqb.de/fractalqb/xsx"
 	"github.com/stvp/assert"
 )
 

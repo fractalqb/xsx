@@ -1,7 +1,7 @@
 package gem
 
 import (
-	"github.com/fractalqb/xsx"
+	"git.fractalqb.de/fractalqb/xsx"
 )
 
 func Print(pr xsx.Printer, xpr Expr) (err error) {

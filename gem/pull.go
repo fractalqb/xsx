@@ -3,7 +3,7 @@ package gem
 import (
 	"fmt"
 
-	"github.com/fractalqb/xsx"
+	"git.fractalqb.de/fractalqb/xsx"
 )
 
 func ReadCurrent(p *xsx.PullParser) (Expr, error) {

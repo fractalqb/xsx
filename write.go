@@ -89,7 +89,9 @@ func CondQuoted(str string) (string, bool) {
 type QuoteMode int
 
 const (
+	// Quote only if needed
 	Qcond QuoteMode = iota
+	// Always quote
 	Qforce
 	// QSUPPRESS supresses quoting of an atom. This might break XSX syntax!
 	QSUPPRESS

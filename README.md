@@ -1,5 +1,8 @@
 # ![XSX-Logo](doc/xsx-logo.png?raw=true) – eXtended S-eXpressions
 [![Build Status](https://travis-ci.org/fractalqb/xsx.svg)](https://travis-ci.org/fractalqb/xsx)
+[![codecov](https://codecov.io/gh/fractalqb/xsx/branch/master/graph/badge.svg)](https://codecov.io/gh/fractalqb/xsx)
+[![Go Report Card](https://goreportcard.com/badge/github.com/fractalqb/xsx)](https://goreportcard.com/report/github.com/fractalqb/xsx)
+[![GoDoc](https://godoc.org/github.com/fractalqb/xsx?status.svg)](https://godoc.org/github.com/fractalqb/xsx)
 
 `import "git.fractalqb.de/fractalqb/xsx"`
 
@@ -24,10 +27,10 @@ to the application.
 
 Frist of all, XSX is not about datatypes, in this it is comparable to
 e.g. XML (No! don't leave… its much simpler). Instead its building
-block of is the _atom_, i.e. nothing else than a sequence of
-characters, aka a 'string'. Atoms come as _quoted atoms_ and as
-_unquoted atoms_. One needs to quote an atom when the atom's string
-contains characters that have a special meaning in XSX: ()[]{}\ and
+block is the _atom_, i.e. nothing else than a sequence of characters,
+aka a 'string'. Atoms come as _quoted atoms_ and as _unquoted
+atoms_. One needs to quote an atom when the atom's string contains
+characters that have a special meaning in XSX: ()[]{}\ and
 white-space.
 
 ### Regexp style definition of Atom
@@ -44,17 +47,18 @@ quoted atom"`.  Also `"("` is an atom but `(` is not an atom. We need
 
 ### Sequences now BNF Style
 
-Each atom is an XSX. From XSX one can build sequences:
+Each atom is an XSX and from XSX'es one can build sequences:
 
-    xsxs ::= XSX | XSX xsxs
-    seq1 ::= '(' ')' | '(' xsxs ')'
-    seq2 ::= '[' ']' | '[' xsxs ']'
-    seq3 ::= '{' '}' | '{' xsxs '}'
     XSX  ::= atom | seq1 | seq2 | seq3
+    seq1 ::= '(' ws* ')' | '(' ws* xsxs ws* ')'
+    seq2 ::= '[' ws* ']' | '[' ws* xsxs ws* ']'
+    seq3 ::= '{' ws* '}' | '{' ws* xsxs ws* '}'
+    xsxs ::= XSX | XSX ws* xsxs
+    ws   ::= “Unicode's White Space”
 
 ### Out-Of-Band Information with Meta XSXs
 
-You can prefix each XSX with a backslash '\' to make that expression a
+You can prefix each XSX with a backslash to make that expression a
 meta-expression. A meta-expression is not considered to be a XSX,
 i.e. you cannot create meta-meta-expressions or
 meta-meta-meta-expressions… hmm… and not event
@@ -71,6 +75,13 @@ class="green">hiho</div>`.
 None! … despite the fact that I found it to be fun – and useful in
 some situations.
 
-Because its so simple it is easy to use the `PullParser` as a
+Because XSX syntax so simple it is easy to use the `PullParser` as a
 tokenizer to build customized parsers for proprietary data
-files. E.g. see the `table` sub-package.
+files. E.g. see the `table` sub-package. On the other hand the low
+level parser and scanner API is inspired by the
+[expat](https://libexpat.github.io/) streaming parser that allows one
+to push some data into the paring machinery and it will fire
+appropriate callbacks when tokes are detected.
+
+So, if you are looking for something that's even simpler than JSON or
+YAML you might give it a try… Happy coding!

@@ -8,4 +8,5 @@ go_import_path: git.fractalqb.de/fractalqb/xsx
 install:
   - go get -u -t
 
-script: go test -v ./...
+script:
+  - go test -v -coverprofile=coverage.txt -covermode=atomic ./...

@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"io"
 	"testing"
 )
 
@@ -23,11 +22,11 @@ type event struct {
 	quot bool
 }
 
-func EvtBeg(brace rune, meta bool) event {
+func EvtBeg(brace byte, meta bool) event {
 	return event{scnBegin, string(brace), meta, false}
 }
 
-func EvtEnd(brace rune) event {
+func EvtEnd(brace byte) event {
 	return event{scnEnd, string(brace), false, false}
 }
 
@@ -53,10 +52,11 @@ func (p *TestParser) checkEvtPtr() (err error) {
 	return err
 }
 
-func (p *TestParser) Begin(isMeta bool, brace rune) (err error) {
+func (p *TestParser) Begin(isMeta bool, brace byte) {
 	p.checkEvtPtr()
 	xpct := p.events[p.evtPtr]
 	p.evtPtr++
+	var err error
 	if xpct.sTok != scnBegin {
 		err = fmt.Errorf("wrong scanner event: %s, expetced %s",
 			scnNames[scnBegin],
@@ -70,13 +70,16 @@ func (p *TestParser) Begin(isMeta bool, brace rune) (err error) {
 	if xpct.meta != isMeta {
 		err = fmt.Errorf("wrong meta on %c: %t", brace, isMeta)
 	}
-	return err
+	if err != nil {
+		panic(err)
+	}
 }
 
-func (p *TestParser) End(brace rune) (err error) {
+func (p *TestParser) End(isMeta bool, brace byte) {
 	p.checkEvtPtr()
 	xpct := p.events[p.evtPtr]
 	p.evtPtr++
+	var err error
 	if xpct.sTok != scnEnd {
 		err = fmt.Errorf("wrong scanner event: %s, expetced %s",
 			scnNames[scnEnd],
@@ -87,19 +90,22 @@ func (p *TestParser) End(brace rune) (err error) {
 			brace,
 			xpct.tok)
 	}
-	return err
+	if err != nil {
+		panic(err)
+	}
 }
 
-func (p *TestParser) Atom(isMeta bool, atom string, quoted bool) (err error) {
+func (p *TestParser) Atom(isMeta bool, atom []byte, quoted bool) {
 	p.checkEvtPtr()
 	xpct := p.events[p.evtPtr]
 	p.evtPtr++
+	var err error
 	if xpct.sTok != scnAtom {
 		err = fmt.Errorf("wrong scanner event: %s, expetced %s",
 			scnNames[scnAtom],
 			scnNames[xpct.sTok])
 	}
-	if xpct.tok != atom {
+	if xpct.tok != string(atom) {
 		err = fmt.Errorf("wrong atom: %s, expected %s",
 			atom,
 			xpct.tok)
@@ -112,7 +118,9 @@ func (p *TestParser) Atom(isMeta bool, atom string, quoted bool) (err error) {
 	if xpct.meta != isMeta {
 		err = fmt.Errorf("wrong meta for atom '%s': %t", atom, isMeta)
 	}
-	return err
+	if err != nil {
+		panic(err)
+	}
 }
 
 func ExampleParserExample() {
@@ -123,7 +131,7 @@ func ExampleParserExample() {
 		EvtAtm("a", false, false),
 		EvtAtm("test", false, false),
 		EvtEnd(')')))
-	p.PushString("(this is a test)", true)
+	p.ScanString("(this is a test)")
 	//	p.State.(*TestParser)
 	//	if ok {
 	//		fmt.Println(tp.evtPtr)
@@ -140,8 +148,8 @@ func TestParserRead(t *testing.T) {
 		EvtEnd(')'),
 	))
 	txt := bytes.NewBufferString("(this is a test)")
-	err := p.Read(bufio.NewReader(txt), true)
-	if err != io.EOF {
+	err := p.Read(bufio.NewReader(txt))
+	if err != nil {
 		t.Error(err)
 	}
 }

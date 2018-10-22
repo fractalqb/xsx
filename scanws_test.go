@@ -7,30 +7,36 @@ import (
 
 type WsScan bytes.Buffer
 
-func (s *WsScan) begin(meta bool, brace rune) error {
+func (s *WsScan) cbBegin(meta bool, brace byte) {
 	_, err := fmt.Printf("begin: %t %c (%s)\n", meta, brace, (*bytes.Buffer)(s).String())
-	return err
+	if err != nil {
+		panic(err)
+	}
 }
 
-func (s *WsScan) end(brace rune) error {
+func (s *WsScan) cbEnd(meta bool, brace byte) {
 	_, err := fmt.Printf("end: %c (%s)\n", brace, (*bytes.Buffer)(s).String())
-	return err
+	if err != nil {
+		panic(err)
+	}
 }
 
-func (s *WsScan) atom(meta bool, atom string, quoted bool) error {
+func (s *WsScan) cbAtom(meta bool, atom []byte, quoted bool) {
 	_, err := fmt.Printf("atom: %t [%s] %t (%s)\n",
 		meta, atom, quoted, (*bytes.Buffer)(s).String())
-	return err
+	if err != nil {
+		panic(err)
+	}
 }
 
 func ExampleWsBuf_wsBeforeAtom() {
 	wsc := bytes.NewBuffer(nil)
 	scn := NewScanner(
-		(*WsScan)(wsc).begin,
-		(*WsScan)(wsc).end,
-		(*WsScan)(wsc).atom)
+		(*WsScan)(wsc).cbBegin,
+		(*WsScan)(wsc).cbEnd,
+		(*WsScan)(wsc).cbAtom)
 	scn.WsBuf = wsc
-	scn.PushString("  foo", true)
+	scn.ScanString("  foo")
 	// Output:
 	// atom: false [foo] false (  )
 }
@@ -38,11 +44,11 @@ func ExampleWsBuf_wsBeforeAtom() {
 func ExampleWsBuf_wsAfterAtom() {
 	wsc := bytes.NewBuffer(nil)
 	scn := NewScanner(
-		(*WsScan)(wsc).begin,
-		(*WsScan)(wsc).end,
-		(*WsScan)(wsc).atom)
+		(*WsScan)(wsc).cbBegin,
+		(*WsScan)(wsc).cbEnd,
+		(*WsScan)(wsc).cbAtom)
 	scn.WsBuf = wsc
-	scn.PushString("foo  ", true)
+	scn.ScanString("foo  ")
 	fmt.Printf("ws: (%s)", wsc.String())
 	// Output:
 	// atom: false [foo] false ()

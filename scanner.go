@@ -4,35 +4,28 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"unicode"
+	"sync"
 )
 
 const (
 	// Meta is the rune used as escape for meta expressions.
-	Meta    = '\\'
+	Meta = '\\'
 	// MetaStr is the string variant of the Meta rune.
 	MetaStr = string(Meta)
 )
 
-type scanStat int
-
-const (
-	tokNone scanStat = iota
-	tokChars
-	tokStr
-)
-
 type ScanError struct {
-	pos uint64
-	msg string
-	rsn error
+	hint string
+	pos  int64
+	msg  string
+	rsn  error
 }
 
 func (err *ScanError) Error() string {
-	return fmt.Sprintf("@%d:%s", err.pos, err.msg)
+	return fmt.Sprintf("%s@%d:%s", err.hint, err.pos, err.msg)
 }
 
-func (err *ScanError) Position() uint64 {
+func (err *ScanError) Position() int64 {
 	return err.pos
 }
 
@@ -45,398 +38,411 @@ func (err *ScanError) Reason() error {
 }
 
 // BeginFunc is called by Scanner when an opening bracket is detected.
-type BeginFunc func(isMeta bool, brace rune) error
+type BeginFunc func(isMeta bool, brace byte)
 
 // BeginNop performs No OPeration on begin event.
-func BeginNop(isMeta bool, brace rune) error {
-	return nil
-}
+func BeginNop(isMeta bool, brace byte) {}
 
 // EndFunc is called by Scanner when a closing bracket is detected that matches
 // the corresponding opening bracket. For non-matching brackets Scanner.Next
 // returns a ScanError before EndFunc would have been called.
-type EndFunc func(brace rune) error
+type EndFunc func(isMeta bool, brace byte)
 
 // EndNop performs No OPeration on end event.
-func EndNop(brace rune) error {
-	return nil
-}
+func EndNop(isMeta bool, brace byte) {}
 
 // AtomFunc is called by Scanner when an XSX atom is detected.
-type AtomFunc func(isMeta bool, atom string, quoted bool) error
+type AtomFunc func(isMeta bool, atom []byte, quoted bool)
 
 // AtomNop performs No OPeration on atom event.
-func AtomNop(isMeta bool, atom string, quoted bool) error {
+func AtomNop(isMeta bool, atom []byte, quoted bool) {}
+
+type atomHeadMode int
+
+const (
+	aheadPlain atomHeadMode = iota
+	aheadQuote
+	aheadEsc
+)
+
+type Scanner struct {
+	Begin     BeginFunc
+	End       EndFunc
+	Atom      AtomFunc
+	SrcHint   string
+	WsBuf     *bytes.Buffer
+	pos       int64
+	meta      bool
+	nest      []nesting
+	atomHead  []byte
+	aheadMode atomHeadMode
+	qatomBuf  bytes.Buffer
+}
+
+type nesting struct {
+	meta   bool
+	cbrace byte
+}
+
+func NewScanner(begin BeginFunc, end EndFunc, atom AtomFunc) *Scanner {
+	return &Scanner{
+		Begin: begin,
+		End:   end,
+		Atom:  atom,
+	}
+}
+
+func (s *Scanner) Complete() bool {
+	return s.atomHead == nil && !s.meta && len(s.nest) == 0
+}
+
+func (s *Scanner) Finish() (err error) {
+	if len(s.nest) > 0 {
+		return &ScanError{
+			hint: s.SrcHint,
+			pos:  s.pos,
+			msg:  "cannot finish scanning in nested expression",
+		}
+	}
+	if s.atomHead != nil {
+		if s.aheadMode != aheadPlain {
+			return &ScanError{
+				hint: s.SrcHint,
+				pos:  s.pos,
+				msg:  "unterminated quoted atom",
+			}
+		}
+		defer func() {
+			if p := recover(); p != nil {
+				switch x := p.(type) {
+				case *ScanError:
+					err = x
+				case error:
+					err = &ScanError{hint: s.SrcHint, pos: s.pos, msg: x.Error(), rsn: x}
+				default:
+					err = &ScanError{
+						hint: s.SrcHint,
+						pos:  s.pos,
+						msg:  fmt.Sprintf("%T:[%v]", p, p),
+					}
+				}
+			}
+		}()
+		s.Atom(s.meta, s.atomHead, s.aheadMode == aheadQuote)
+		s.meta = false
+		s.atomHead = nil
+	} else if s.meta {
+		s.Atom(false, metaAtom, false)
+	}
 	return nil
 }
 
-// Scanner implements a callback based scanner for XSX files
-type Scanner struct {
-	cbBegin BeginFunc
-	cbEnd   EndFunc
-	cbAtom  AtomFunc
-	// WsBuf can be set to point to a bytes.Buffer to let the scanner all white
-	// space that precedes a detected token. If WsBuf is set to nil the scanner
-	// completely ignores white space. This can be useful when the scanner must
-	// reconstruct the white space of the input.
-	WsBuf     *bytes.Buffer
-	charCount uint64
-	stat      scanStat
-	strEsc    bool
-	meta      bool
-	nesting   []rune
-	token     bytes.Buffer
+func (s *Scanner) Depth() int { return len(s.nest) }
+
+func (s *Scanner) Reset() {
+	s.pos = 0
+	s.meta = false
+	if s.nest != nil {
+		s.nest = s.nest[:0]
+	}
+	s.atomHead = nil
 }
 
-// NewScanner creates a new XSX scanner that on scanning an opening bracket, a
-// closing bracket or an XSX atom calls beginCallback, endCallback or
-// atomCallback respectively. The scanner will check for brackets to be lanaced,
-// i.e. an open brace is matched with a closing brace, opening square brackets
-// are closed with closing square brakcets and opeing curly brackets are closed
-// with closing curly brackets.
-func NewScanner(
-	beginCallback BeginFunc,
-	endCallback EndFunc,
-	atomCallback AtomFunc) (parser *Scanner) {
-	return &Scanner{
-		cbBegin: beginCallback,
-		cbEnd:   endCallback,
-		cbAtom:  atomCallback}
+func (s *Scanner) push(meta bool, closing byte) {
+	s.nest = append(s.nest, nesting{meta, closing})
 }
 
-func (s *Scanner) Push(c rune) (done bool, err error) {
-	done = false
-	s.charCount++
-	switch s.stat {
-	case tokNone:
-		switch c {
-		case '(':
-			s.nestPush(')')
-			if err = s.callBegin(s.meta, '('); err != nil {
-				return true, err
+func (s *Scanner) pop(found byte) (meta bool) {
+	if end := len(s.nest); end > 0 {
+		end--
+		n := s.nest[end]
+		s.nest = s.nest[:end]
+		if n.cbrace != found {
+			panic(fmt.Errorf("unbalanced bracing: '%c', expected '%c'",
+				found, n.cbrace))
+		}
+		return n.meta
+	} else {
+		panic(fmt.Errorf("%s:%d:poping '%c' from unnested",
+			s.SrcHint, s.pos, found))
+	}
+}
+
+type cClass int
+
+const (
+	ccSpace cClass = (1 << iota)
+	ccTok
+)
+
+var cclasses = make([]cClass, 256)
+
+func init() {
+	for _, c := range []byte{'\t', '\n', '\v', '\f', '\r', ' ', 0x85, 0xA0} {
+		cclasses[c] |= ccSpace
+	}
+	for _, c := range []byte{'(', ')', '[', ']', '{', '}', '"', Meta} {
+		cclasses[c] |= ccTok
+	}
+}
+
+func isAny(c byte, class cClass) bool {
+	return (cclasses[c] & class) != 0
+}
+
+func (s *Scanner) skipspace(txt []byte) (res int) {
+	if s.WsBuf == nil {
+		for res < len(txt) {
+			if isAny(txt[res], ccSpace) {
+				res++
+			} else {
+				return res
 			}
-			s.meta = false
-			s.clearWs()
-		case '[':
-			s.nestPush(']')
-			if err = s.callBegin(s.meta, '['); err != nil {
-				return true, err
+		}
+	} else {
+		s.WsBuf.Reset()
+		for res < len(txt) {
+			if isAny(txt[res], ccSpace) {
+				s.WsBuf.WriteByte(txt[res])
+				res++
+			} else {
+				return res
 			}
-			s.meta = false
-			s.clearWs()
-		case '{':
-			s.nestPush('}')
-			if err = s.callBegin(s.meta, '{'); err != nil {
-				return true, err
-			}
-			s.meta = false
-			s.clearWs()
-		case ')', ']', '}':
-			if s.meta {
-				if err = s.callAtom(false, MetaStr, false); err != nil {
-					return true, err
-				}
-				s.token.Reset()
-				s.meta = false
-				s.clearWs()
-			}
-			if s.Depth() == 0 {
-				return true, &ScanError{
-					pos: s.charCount,
-					msg: fmt.Sprintf("closing bracket '%c' at top level", c),
-				}
-			}
-			if e := s.nestPop(); e != c {
-				return true, &ScanError{
-					pos: s.charCount,
-					msg: fmt.Sprintf("unbalanced bracing: %c, expected %c", c, e),
-				}
-			}
-			if err = s.callEnd(c); err != nil {
-				return true, err
-			}
-			s.clearWs()
+		}
+	}
+	return res
+}
+
+func skipUAtom(txt []byte) (atom int) {
+	for atom < len(txt) {
+		if isAny(txt[atom], ccSpace|ccTok) {
+			return atom
+		}
+		atom++
+	}
+	return -1
+}
+
+func skipQAtom(txt []byte, sb *bytes.Buffer) (atom int, ahead atomHeadMode) {
+	sb.Reset()
+	for atom < len(txt) {
+		switch c := txt[atom]; c {
 		case '"':
-			s.stat = tokStr
+			return atom, aheadQuote
+		case '\\':
+			sb.Reset()
+			sb.Write(txt[:atom]) // TODO error
+			esc := true
+			for atom++; atom < len(txt); atom++ {
+				if esc {
+					sb.WriteByte(txt[atom])
+					esc = false
+				} else {
+					switch c := txt[atom]; c {
+					case '"':
+						return atom, aheadQuote
+					case '\\':
+						esc = true
+					default:
+						sb.WriteByte(c)
+					}
+				}
+			}
+			if esc {
+				return -1, aheadEsc
+			} else {
+				return -1, aheadQuote
+			}
+		}
+		atom++
+	}
+	return -1, aheadQuote
+}
+
+func (s *Scanner) callBegin(o, c byte) {
+	s.Begin(s.meta, o)
+	s.push(s.meta, c)
+	s.meta = false
+}
+
+func (s *Scanner) callEnd(c byte) {
+	if s.meta {
+		s.Atom(false, metaAtom, false)
+		s.meta = false
+	}
+	m := s.pop(c)
+	s.End(m, c)
+}
+
+var metaAtom = []byte{Meta}
+
+func (s *Scanner) Scan(txt []byte) (err error) {
+	rp, end := int64(0), int64(len(txt))
+	defer func() {
+		s.pos += rp
+		if p := recover(); p != nil {
+			switch x := p.(type) {
+			case *ScanError:
+				err = x
+			case error:
+				err = &ScanError{hint: s.SrcHint, pos: s.pos, msg: x.Error(), rsn: x}
+			default:
+				err = &ScanError{
+					hint: s.SrcHint,
+					pos:  s.pos,
+					msg:  fmt.Sprintf("%T:[%v]", p, p),
+				}
+			}
+		}
+	}()
+	if s.atomHead != nil {
+		if end == 0 {
+			return nil
+		}
+		if s.aheadMode == aheadPlain {
+			aLen := skipUAtom(txt)
+			if aLen < 0 {
+				s.atomHead = append(s.atomHead, txt...)
+				rp = end
+				return nil
+			}
+			s.atomHead = append(s.atomHead, txt[:aLen]...)
+			s.Atom(s.meta, s.atomHead, false)
+			s.meta = false
+			s.atomHead = nil
+			rp = int64(aLen)
+		} else {
+			if s.aheadMode == aheadEsc {
+				s.atomHead = append(s.atomHead, txt[rp])
+				rp++
+			}
+			aLen, aEsc := skipQAtom(txt[rp:], &s.qatomBuf)
+			if aLen < 0 {
+				if s.qatomBuf.Len() == 0 {
+					s.atomHead = append(s.atomHead, txt...)
+				} else {
+					s.atomHead = append(s.atomHead, s.qatomBuf.Bytes()...)
+				}
+				s.aheadMode = aEsc
+				return nil
+			}
+			if s.qatomBuf.Len() == 0 {
+				s.atomHead = append(s.atomHead, txt[rp:rp+int64(aLen)]...)
+			} else {
+				s.atomHead = append(s.atomHead, s.qatomBuf.Bytes()...)
+			}
+			s.Atom(s.meta, s.atomHead, true)
+			s.meta = false
+			s.atomHead = nil
+			rp += int64(aLen + 1)
+		}
+	}
+	// assert s.atomHead == nil
+	for rp < end {
+		if wse := s.skipspace(txt[rp:]); wse > 0 {
+			if s.meta {
+				s.Atom(false, metaAtom, false)
+				s.meta = false
+			}
+			rp += int64(wse)
+			if rp >= end {
+				return nil
+			}
+		}
+		switch txt[rp] {
+		case '(':
+			s.callBegin('(', ')')
+			rp++
+		case '[':
+			s.callBegin('[', ']')
+			rp++
+		case '{':
+			s.callBegin('{', '}')
+			rp++
+		case ')':
+			s.callEnd(')')
+			rp++
+		case ']':
+			s.callEnd(']')
+			rp++
+		case '}':
+			s.callEnd('}')
+			rp++
+		case '"':
+			rp++
+			aLen, aEsc := skipQAtom(txt[rp:], &s.qatomBuf)
+			if aLen < 0 {
+				if len := s.qatomBuf.Len(); len == 0 {
+					s.atomHead = make([]byte, end-rp)
+					copy(s.atomHead, txt[rp:])
+				} else {
+					s.atomHead = make([]byte, len)
+					copy(s.atomHead, s.qatomBuf.Bytes())
+				}
+				s.aheadMode = aEsc
+				rp = end
+			} else {
+				if s.qatomBuf.Len() == 0 {
+					ae := rp + int64(aLen)
+					s.Atom(s.meta, txt[rp:ae], true)
+				} else {
+					s.Atom(s.meta, s.qatomBuf.Bytes(), true)
+				}
+				s.meta = false
+				rp += int64(aLen + 1)
+			}
 		case Meta:
 			if s.meta {
-				s.stat = tokChars
-				s.token.WriteRune(Meta)
+				s.Atom(true, metaAtom, false)
 				s.meta = false
 			} else {
 				s.meta = true
 			}
+			rp++
 		default:
-			if !unicode.IsSpace(c) {
-				s.stat = tokChars
-				s.token.WriteRune(c)
+			aLen := skipUAtom(txt[rp:])
+			if aLen < 0 {
+				s.atomHead = make([]byte, end-rp)
+				copy(s.atomHead, txt[rp:])
+				s.aheadMode = aheadPlain
+				rp = end
 			} else {
-				if s.meta {
-					if err = s.callAtom(false, MetaStr, false); err != nil {
-						return true, err
-					}
-					s.token.Reset()
-					s.meta = false
-					s.clearWs()
-				}
-				s.memWs(c)
-			}
-		} // case: tokNone
-	case tokChars:
-		switch c {
-		case '(':
-			if err = s.callAtom(s.meta, s.token.String(), false); err != nil {
-				return true, err
-			}
-			s.token.Reset()
-			s.meta = false
-			s.stat = tokNone
-			s.nestPush(')')
-			s.clearWs()
-			if err = s.callBegin(s.meta, '('); err != nil {
-				return true, err
-			}
-		case '[':
-			if err = s.callAtom(s.meta, s.token.String(), false); err != nil {
-				return true, err
-			}
-			s.token.Reset()
-			s.meta = false
-			s.stat = tokNone
-			s.nestPush(']')
-			s.clearWs()
-			if err = s.callBegin(s.meta, '['); err != nil {
-				return true, err
-			}
-		case '{':
-			if err = s.callAtom(s.meta, s.token.String(), false); err != nil {
-				return true, err
-			}
-			s.token.Reset()
-			s.meta = false
-			s.stat = tokNone
-			s.nestPush('}')
-			s.clearWs()
-			if err = s.callBegin(s.meta, '{'); err != nil {
-				return true, err
-			}
-		case ')', ']', '}':
-			if err = s.callAtom(s.meta, s.token.String(), false); err != nil {
-				return true, err
-			}
-			s.token.Reset()
-			s.meta = false
-			s.stat = tokNone
-			s.clearWs()
-			if s.Depth() == 0 {
-				return true, &ScanError{
-					pos: s.charCount,
-					msg: fmt.Sprintf("xsx push: closing bracket '%c' at top level", c),
-				}
-			}
-			if e := s.nestPop(); e != c {
-				return true, &ScanError{
-					pos: s.charCount,
-					msg: fmt.Sprintf("unbalanced bracing: %c, expected %c", c, e),
-				}
-			}
-			if err = s.callEnd(c); err != nil {
-				return true, err
-			}
-			done = s.Depth() == 0
-		case '"':
-			if err = s.callAtom(s.meta, s.token.String(), false); err != nil {
-				return true, err
-			}
-			s.token.Reset()
-			s.meta = false
-			s.stat = tokStr
-			s.clearWs()
-		case Meta:
-			if err = s.callAtom(s.meta, s.token.String(), false); err != nil {
-				return true, err
-			}
-			s.token.Reset()
-			s.meta = true
-			s.stat = tokNone
-			s.clearWs()
-		default:
-			if unicode.IsSpace(c) {
-				if err = s.callAtom(s.meta, s.token.String(), false); err != nil {
-					return true, err
-				}
-				s.token.Reset()
+				ae := rp + int64(aLen)
+				s.Atom(s.meta, txt[rp:ae], false)
 				s.meta = false
-				s.stat = tokNone
-				s.clearWs()
-				s.memWs(c)
-				done = s.Depth() == 0
-			} else {
-				s.token.WriteRune(c)
+				rp = ae
 			}
-		} // case: tokChars
-	case tokStr:
-		if s.strEsc {
-			s.token.WriteRune(c)
-			s.strEsc = false
-		} else {
-			switch c {
-			case '"':
-				if err = s.callAtom(s.meta, s.token.String(), true); err != nil {
-					return true, err
-				}
-				s.token.Reset()
-				s.meta = false
-				s.stat = tokNone
-				s.clearWs()
-				done = s.Depth() == 0
-			case '\\':
-				// assert: !s.strEsc
-				s.strEsc = true
-			default:
-				s.token.WriteRune(c)
-			}
-		}
-	}
-	return done, nil
-}
-
-func (s *Scanner) Finish() (err error) {
-	switch s.stat {
-	case tokNone:
-		if s.meta {
-			if err = s.callAtom(false, MetaStr, false); err != nil {
-				return err
-			}
-		}
-	case tokChars:
-		if err = s.callAtom(s.meta, s.token.String(), false); err != nil {
-			return err
-		}
-	case tokStr:
-		err = &ScanError{
-			pos: s.charCount,
-			msg: "finish inside quoted atom",
-		}
-		return err
-	}
-	if s.Depth() > 0 {
-		err = &ScanError{
-			pos: s.charCount,
-			msg: "finish inside structure",
-		}
-	}
-	if err == nil {
-		s.stat = tokNone
-		s.meta = false
-	}
-	return err
-}
-
-func (s *Scanner) Reset() {
-	s.nesting = s.nesting[0:0]
-	s.token.Reset()
-	s.stat = tokNone
-	s.strEsc = false
-	s.charCount = 0
-	s.meta = false
-	s.clearWs()
-}
-
-func (s *Scanner) PushString(txt string, final bool) error {
-	for _, c := range txt {
-		if _, err := s.Push(c); err != nil {
-			return err
-		}
-	}
-	if final {
-		if err := s.Finish(); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (s *Scanner) Read(rd io.RuneReader, final bool) (err error) {
-	var c rune
-	for c, _, err = rd.ReadRune(); err == nil; c, _, err = rd.ReadRune() {
-		if _, err = s.Push(c); err != nil {
-			return err
-		}
-	}
-	if err != io.EOF {
-		return err
-	}
-	if final {
-		if err := s.Finish(); err != nil {
-			return err
 		}
 	}
 	return err
 }
 
-func (s *Scanner) Depth() int {
-	return len(s.nesting)
-}
-
-func (s *Scanner) nestPush(c rune) {
-	s.nesting = append(s.nesting, c)
-}
-
-func (s *Scanner) nestPop() rune {
-	// assert len(s.nesting) > 0
-	res := s.nesting[len(s.nesting)-1]
-	s.nesting = s.nesting[:len(s.nesting)-1]
-	return res
-}
-
-func (s *Scanner) callAtom(isMeta bool, atom string, quoted bool) error {
-	if err := s.cbAtom(isMeta, atom, quoted); err != nil {
-		return &ScanError{
-			pos: s.charCount,
-			msg: fmt.Sprintf("xsx push: atom '%s' meta=%t quoted=%t failed: %s",
-				atom,
-				isMeta,
-				quoted,
-				err.Error()),
-			rsn: err}
+func (s *Scanner) ScanString(str string) (err error) {
+	err = s.Scan([]byte(str))
+	if err != nil {
+		return err
 	}
-	return nil
+	err = s.Finish()
+	return err
 }
 
-func (s *Scanner) callBegin(isMeta bool, brace rune) error {
-	if err := s.cbBegin(isMeta, brace); err != nil {
-		return &ScanError{
-			pos: s.charCount,
-			msg: fmt.Sprintf("xsx push: begin '%c' meta=%t failed: %s",
-				brace,
-				isMeta,
-				err),
-			rsn: err}
-	}
-	return nil
+var buf4k = sync.Pool{
+	New: func() interface{} {
+		return make([]byte, 4096)
+	},
 }
 
-func (s *Scanner) callEnd(brace rune) error {
-	if err := s.cbEnd(brace); err != nil {
-		return &ScanError{
-			pos: s.charCount,
-			msg: fmt.Sprintf("xsx push: end '%c' failed: %s",
-				brace,
-				err.Error()),
-			rsn: err}
+func (s *Scanner) Read(rd io.Reader) (err error) {
+	buf := buf4k.Get().([]byte)
+	defer func() { buf4k.Put(buf) }()
+	for sz, err := rd.Read(buf); err == nil; sz, err = rd.Read(buf) {
+		serr := s.Scan(buf[:sz])
+		if serr != nil {
+			return serr
+		}
 	}
-	return nil
-}
-
-func (s *Scanner) memWs(c rune) {
-	if s.WsBuf != nil {
-		s.WsBuf.WriteRune(c)
+	if err == io.EOF {
+		err = s.Finish()
 	}
-}
-
-func (s *Scanner) clearWs() {
-	if s.WsBuf != nil {
-		s.WsBuf.Reset()
-	}
+	return err
 }

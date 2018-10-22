@@ -67,7 +67,7 @@ const braceMask = 7 << braceShift
 var barceOpen = []rune{0, '(', '[', 0, '{'}
 var barceClose = []rune{0, ')', ']', 0, '}'}
 
-func FromRune(c rune) Brace {
+func FromRune(c byte) Brace {
 	switch c {
 	case '(', ')':
 		return Paren

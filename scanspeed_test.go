@@ -171,10 +171,11 @@ func BenchmarkScanner_noWsBuf(b *testing.B) {
 	buf = nil
 	runtime.GC()
 	scn := NewScanner(BeginNop, EndNop, AtomNop)
+	//os.Stderr.Write(txt)
 	fmt.Fprintf(os.Stderr, "message size: %d x %d\n", b.N, len(txt))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		scn.Read(bytes.NewReader(txt), true)
+		scn.Read(bytes.NewReader(txt))
 		scn.Reset()
 	}
 }
@@ -191,11 +192,12 @@ func BenchmarkScanner_withWsBuf(b *testing.B) {
 	buf = nil
 	runtime.GC()
 	scn := NewScanner(BeginNop, EndNop, AtomNop)
-	scn.WsBuf = bytes.NewBuffer(nil)
+	scn.WsBuf = &bytes.Buffer{}
+	//os.Stderr.Write(txt)
 	fmt.Fprintf(os.Stderr, "message size: %d x %d\n", b.N, len(txt))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		scn.Read(bytes.NewReader(txt), true)
+		scn.Read(bytes.NewReader(txt))
 		scn.Reset()
 	}
 }

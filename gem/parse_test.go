@@ -10,9 +10,9 @@ import (
 func TestParse_complex(t *testing.T) {
 	var pstat State
 	scn := xsx.NewParser(&pstat)
-	scn.PushString(`foo
+	scn.ScanString(`foo
 	(bar \[baz])
-	\4711`, true)
+	\4711`)
 	assert.Equal(t, 3, len(pstat.Results))
 	a, ok := pstat.Results[0].(*Atom)
 	assert.True(t, ok)

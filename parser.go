@@ -3,9 +3,9 @@ package xsx
 // State is an interface for parser states that are changed by the XSX event
 // callback methods of the state object.
 type State interface {
-	Begin(isMeta bool, brace rune) error
-	End(brace rune) error
-	Atom(isMeta bool, atom string, quoted bool) error
+	Begin(isMeta bool, brace byte)
+	End(isMeta bool, brace byte)
+	Atom(isMeta bool, atom []byte, quoted bool)
 }
 
 // Parser combines a Scanner with a parser state so that scanner methods can be
@@ -17,15 +17,6 @@ type Parser struct {
 }
 
 func NewParser(p State) *Parser {
-	scn := NewScanner(
-		func(isMeta bool, brace rune) error {
-			return p.Begin(isMeta, brace)
-		},
-		func(brace rune) error {
-			return p.End(brace)
-		},
-		func(isMeta bool, atom string, quoted bool) error {
-			return p.Atom(isMeta, atom, quoted)
-		})
+	scn := NewScanner(p.Begin, p.End, p.Atom)
 	return &Parser{State: p, Scanner: scn}
 }

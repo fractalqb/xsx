@@ -1,4 +1,4 @@
-// Package XSX provides tools for parsing so called eXtended S-eXpressions.
+// Package xsx provides tools for parsing so called eXtended S-eXpressions.
 // Extended means the following things compared to
 // https://people.csail.mit.edu/rivest/sexp.html:
 //
@@ -12,3 +12,5 @@
 // of the so called "octet strings". Things like that are completely left
 // to the application.
 package xsx
+
+//go:generate versioner -pkg xsx ./VERSION ./version.go

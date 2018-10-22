@@ -1,11 +1,15 @@
 package gem
 
+import (
+	"strings"
+)
+
 type State struct {
 	Results []Expr
 	ctx     []*Sequence
 }
 
-func (pst *State) Begin(isMeta bool, brace rune) error {
+func (pst *State) Begin(isMeta bool, brace byte) {
 	s := &Sequence{}
 	s.SetMeta(isMeta)
 	s.SetBrace(FromRune(brace))
@@ -14,21 +18,21 @@ func (pst *State) Begin(isMeta bool, brace rune) error {
 		c.Elems = append(c.Elems, s)
 	}
 	pst.ctx = append(pst.ctx, s)
-	return nil
 }
 
-func (pst *State) End(brace rune) error {
+func (pst *State) End(isMeta bool, brace byte) {
 	lm1 := len(pst.ctx) - 1
 	s := pst.ctx[lm1]
 	pst.ctx = pst.ctx[:lm1]
 	if len(pst.ctx) == 0 {
 		pst.Results = append(pst.Results, s)
 	}
-	return nil
 }
 
-func (pst *State) Atom(isMeta bool, atom string, quoted bool) error {
-	a := &Atom{Str: atom}
+func (pst *State) Atom(isMeta bool, atom []byte, quoted bool) {
+	var sb strings.Builder
+	sb.Write(atom)
+	a := &Atom{Str: sb.String()}
 	a.SetMeta(isMeta)
 	a.SetQuoted(quoted)
 	if len(pst.ctx) == 0 {
@@ -37,5 +41,4 @@ func (pst *State) Atom(isMeta bool, atom string, quoted bool) error {
 		s := pst.ctx[len(pst.ctx)-1]
 		s.Elems = append(s.Elems, a)
 	}
-	return nil
 }

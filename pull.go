@@ -38,11 +38,12 @@ func (t Token) String() string {
 type tokInfo struct {
 	tok     Token
 	meta    bool
-	bracket rune
+	bracket byte
 }
 
 type PullParser struct {
-	rd           *bufio.Reader
+	rd           io.Reader
+	buf          []byte
 	tokWr, tokRd int
 	toks         [2]tokInfo
 	Atom         string // atom can only appear in tokInfo[0]
@@ -50,18 +51,22 @@ type PullParser struct {
 	scn          *Scanner
 }
 
+func (pp *PullParser) read() error {
+	_, err := pp.rd.Read(pp.buf)
+	return err
+}
+
 func NewPullParser(rd *bufio.Reader) *PullParser {
-	res := &PullParser{rd: rd}
+	res := &PullParser{rd: rd, buf: make([]byte, 1)}
 	scn := NewScanner(
-		func(isMeta bool, bracket rune) error {
+		func(isMeta bool, bracket byte) {
 			ti := &res.toks[res.tokWr]
 			ti.tok = TokBegin
 			ti.bracket = bracket
 			ti.meta = isMeta
 			res.tokWr++
-			return nil
 		},
-		func(bracket rune) error {
+		func(isMeta bool, bracket byte) {
 			ti := &res.toks[res.tokWr]
 			ti.tok = TokEnd
 			ti.bracket = bracket
@@ -70,17 +75,17 @@ func NewPullParser(rd *bufio.Reader) *PullParser {
 			if res.scn.Depth() < 1 {
 				res.scn.Reset()
 			}
-			return nil
 		},
-		func(isMeta bool, atom string, quoted bool) error {
+		func(isMeta bool, atom []byte, quoted bool) {
 			ti := &res.toks[res.tokWr]
 			ti.tok = TokAtom
 			ti.meta = isMeta
 			// ti.bracket undefined
-			res.Atom = atom
+			var sb strings.Builder
+			sb.Write(atom)
+			res.Atom = sb.String()
 			res.WasQuot = quoted
 			res.tokWr++
-			return nil
 		})
 	res.scn = scn
 	return res
@@ -95,7 +100,7 @@ func (p *PullParser) Next() (res Token, err error) {
 	p.tokWr = 0
 	p.tokRd = 0
 	for p.tokRd >= p.tokWr {
-		r, _, err := p.rd.ReadRune()
+		err := p.read()
 		if err == io.EOF {
 			err = p.scn.Finish()
 			if p.tokWr >= len(p.toks) {
@@ -111,7 +116,7 @@ func (p *PullParser) Next() (res Token, err error) {
 			return res, err
 		} else if err != nil {
 			return TokEOI, err
-		} else if _, err = p.scn.Push(r); err != nil {
+		} else if err = p.scn.Scan(p.buf); err != nil {
 			return TokEOI, err
 		}
 	}
@@ -127,7 +132,7 @@ func (p *PullParser) LastToken() Token {
 	return p.toks[p.tokRd-1].tok
 }
 
-func (p *PullParser) LastBrace() rune {
+func (p *PullParser) LastBrace() byte {
 	if p.tokRd <= 0 {
 		return 0
 	}
@@ -247,7 +252,7 @@ func (p *PullParser) ExpectBegin(whichBrackets string, meta ExpectMeta) error {
 	case tok != TokBegin:
 		return fmt.Errorf("expected begin token, got %s", tok)
 	case len(whichBrackets) > 0 &&
-		strings.IndexRune(whichBrackets, p.LastBrace()) < 0:
+		strings.IndexByte(whichBrackets, p.LastBrace()) < 0:
 		return fmt.Errorf("expected on of '%s', got %c", whichBrackets, p.LastBrace())
 	}
 	return checkMeta(p, meta)
@@ -271,7 +276,7 @@ func (p *PullParser) ExpectEnd(whichBrackets string) error {
 	case tok != TokEnd:
 		return fmt.Errorf("expected end token, got %s", tok)
 	case len(whichBrackets) > 0 &&
-		strings.IndexRune(whichBrackets, p.LastBrace()) < 0:
+		strings.IndexByte(whichBrackets, p.LastBrace()) < 0:
 		return fmt.Errorf("expected on of '%s', got %c", whichBrackets, p.LastBrace())
 	default:
 		return nil

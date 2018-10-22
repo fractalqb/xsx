@@ -20,10 +20,10 @@ func assertThisTok(t *testing.T, expect Token, pp *PullParser, tokDtls ...interf
 	switch expect {
 	case TokEOI:
 	case TokBegin:
-		assert.Equal(t, tokDtls[0].(rune), pp.LastBrace(), tokDtls[2:]...)
+		assert.Equal(t, byte(tokDtls[0].(rune)), pp.LastBrace(), tokDtls[2:]...)
 		assert.Equal(t, tokDtls[1].(bool), pp.WasMeta(), tokDtls[2:]...)
 	case TokEnd:
-		assert.Equal(t, tokDtls[0].(rune), pp.LastBrace(), tokDtls[1:]...)
+		assert.Equal(t, byte(tokDtls[0].(rune)), pp.LastBrace(), tokDtls[1:]...)
 	case TokAtom:
 		assert.Equal(t, tokDtls[0].(string), pp.Atom, tokDtls[3:]...)
 		assert.Equal(t, tokDtls[1].(bool), pp.WasMeta(), tokDtls[3:]...)

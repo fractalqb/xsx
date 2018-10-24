@@ -23,7 +23,7 @@ func TestReadDef_empty(t *testing.T) {
 		t.Error(err)
 	}
 	if len(tdef) != 0 {
-		t.Error("non-empty table defintiion")
+		t.Error("non-empty table definition")
 	}
 }
 

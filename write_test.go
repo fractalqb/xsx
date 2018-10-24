@@ -35,38 +35,11 @@ func TestNeedQuote(t *testing.T) {
 	}
 }
 
-func ExamplePrint() {
+func ExampleWrite() {
 	p := Indenting(os.Stdout, "  ")
-	Print(p, B('('), "foo", Nl{1, 1}, Bm('{'), "bar", 4711, End, Nl{1, -1}, End)
+	mustExample(Write(p, B('('), "foo", Nl{1, 1}, Bm('{'), "bar", 4711, End, Nl{1, -1}, End))
 	// Output:
 	// (foo
 	//   \{bar 4711}
 	// )
-}
-
-func ExamplePrinterCompact() {
-	p := Compact(os.Stdout)
-	p.Begin('(', false)
-	p.Atom("foo", false, Qcond)
-	p.Begin('{', true)
-	p.Atom("bar", false, Qforce)
-	p.Atom("baz", true, Qcond)
-	p.End()
-	p.Atom("quux", true, Qforce)
-	p.End()
-	// Output:
-	// (foo\{"bar" \baz}\"quux")
-}
-
-func ExamplePrinterPretty() {
-	p := Pretty(os.Stdout)
-	p.Begin('(', false)
-	p.Atom("foo", false, Qcond)
-	p.Begin('{', true)
-	p.Atom("bar", false, Qforce)
-	p.Atom("...", false, Qcond)
-	p.Atom("baz", true, Qcond)
-	p.End()
-	p.Atom("quux", true, Qforce)
-	p.End()
 }

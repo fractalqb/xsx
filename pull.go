@@ -199,7 +199,7 @@ func (err Unexpected) Error() string {
 	case PullMeta:
 		return "pulled meta token"
 	}
-	panic("xsx pulled unkonwn unexpected error")
+	panic("xsx pulled unknown unexpected error")
 }
 
 type ExpectMeta int

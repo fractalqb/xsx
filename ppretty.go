@@ -6,98 +6,75 @@ import (
 	"io"
 )
 
+// PrettyPrinter currently is a quick'n'dirty impl that is about to change
 type PrettyPrinter struct {
 	Writer io.Writer
-	Indent string
-	nest   []rune
-	sep    bool
+	ilvl   int
+	istr   []byte
+	ends   []rune
 }
 
-func Pretty(wr io.Writer) *PrettyPrinter {
-	res := &PrettyPrinter{Writer: wr, Indent: "  "}
+func Pretty(wr io.Writer, indent string) *PrettyPrinter {
+	res := &PrettyPrinter{
+		Writer: wr,
+		istr:   []byte(indent),
+	}
 	return res
 }
 
-func (p *PrettyPrinter) indent(nl bool) (err error) {
-	if nl {
-		if _, err = fmt.Fprintln(p.Writer); err != nil {
+func (pp *PrettyPrinter) indent() (err error) {
+	for i := pp.ilvl; i > 0; i-- {
+		_, err = pp.Writer.Write(pp.istr)
+		if err != nil {
 			return err
 		}
-	}
-	for i := 0; i < len(p.nest); i++ {
-		_, err = p.Writer.Write([]byte(p.Indent))
 	}
 	return err
 }
 
-func (p *PrettyPrinter) Begin(bracket rune, meta bool) (err error) {
-	if p.sep {
-		if err = p.indent(true); err != nil {
-			return err
-		}
+func (pp *PrettyPrinter) Begin(bracket rune, meta bool) (err error) {
+	err = pp.indent()
+	if err != nil {
+		return err
 	}
-	p.sep = false
 	if meta {
-		if _, err := p.Writer.Write([]byte(MetaStr)); err != nil {
+		_, err = pp.Writer.Write(metaAtom)
+		if err != nil {
 			return err
 		}
 	}
-	switch bracket {
-	case '(':
-		if _, err := p.Writer.Write([]byte("(")); err != nil {
-			return err
-		}
-		p.nest = append(p.nest, ')')
-	case '[':
-		if _, err := p.Writer.Write([]byte("[")); err != nil {
-			return err
-		}
-		p.nest = append(p.nest, ']')
-	case '{':
-		if _, err := p.Writer.Write([]byte("{")); err != nil {
-			return err
-		}
-		p.nest = append(p.nest, '}')
-	default:
-		return fmt.Errorf("illegal opening bracket '%c'", bracket)
-	}
-	return nil
+	_, err = fmt.Fprintf(pp.Writer, "%c\n", bracket)
+	pp.ilvl++
+	pp.ends = append(pp.ends, closingRune(bracket))
+	return err
 }
 
-func (p *PrettyPrinter) End() (err error) {
-	if len(p.nest) == 0 {
+func (pp *PrettyPrinter) End() (err error) {
+	if len(pp.ends) == 0 {
 		return errors.New("nothing to end")
 	}
-	b := p.nest[len(p.nest)-1]
-	p.nest = p.nest[:len(p.nest)-1]
-	_, err = p.Writer.Write([]byte(string(b)))
-	p.sep = true
+	end := pp.ends[len(pp.ends)-1]
+	pp.ends = pp.ends[:len(pp.ends)-1]
+	pp.ilvl--
+	err = pp.indent()
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(pp.Writer, "%c\n", end)
 	return err
 }
 
-func (p *PrettyPrinter) Atom(atom string, meta bool, quote QuoteMode) (err error) {
-	if p.sep {
-		if err = p.indent(true); err != nil {
-			return err
-		}
+func (pp *PrettyPrinter) Atom(atom string, meta bool, quote QuoteMode) (err error) {
+	err = pp.indent()
+	if err != nil {
+		return err
 	}
-	p.sep = true
-	if meta {
-		if _, err = p.Writer.Write([]byte(MetaStr)); err != nil {
-			return err
-		}
+	err = printAtom(pp.Writer, atom, meta, quote)
+	if err != nil {
+		return err
 	}
-	switch quote {
-	case Qforce:
-		err = QuoteTo(atom, p.Writer)
-	case QSUPPRESS:
-		_, err = p.Writer.Write([]byte(atom))
-	default:
-		_, err = CondQuoteTo(atom, p.Writer)
-	}
+	_, err = fmt.Fprintln(pp.Writer)
 	return err
 }
 
-func (p *PrettyPrinter) Newline(count int, indent int) error {
-	return nil
-}
+func (p *PrettyPrinter) Newline(count int, indent int) error { return nil }

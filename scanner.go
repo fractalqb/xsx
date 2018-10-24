@@ -168,10 +168,26 @@ func (s *Scanner) pop(found byte) (meta bool) {
 	}
 }
 
+// TODO make it fast & use it everywhere (implemented 1st for ppretty)
+func closing(open byte) byte {
+	switch open {
+	case '(':
+		return ')'
+	case '[':
+		return ']'
+	case '{':
+		return '}'
+	default:
+		return 0
+	}
+}
+
 type cClass int
 
 const (
 	ccSpace cClass = (1 << iota)
+	ccBegin
+	ccEnd
 	ccTok
 )
 
@@ -181,7 +197,13 @@ func init() {
 	for _, c := range []byte{'\t', '\n', '\v', '\f', '\r', ' ', 0x85, 0xA0} {
 		cclasses[c] |= ccSpace
 	}
-	for _, c := range []byte{'(', ')', '[', ']', '{', '}', '"', Meta} {
+	for _, c := range []byte{'(', '[', '{'} {
+		cclasses[c] |= ccBegin
+	}
+	for _, c := range []byte{')', ']', '}'} {
+		cclasses[c] |= ccEnd
+	}
+	for _, c := range []byte{'"', Meta} {
 		cclasses[c] |= ccTok
 	}
 }
@@ -215,7 +237,7 @@ func (s *Scanner) skipspace(txt []byte) (res int) {
 
 func skipUAtom(txt []byte) (atom int) {
 	for atom < len(txt) {
-		if isAny(txt[atom], ccSpace|ccTok) {
+		if isAny(txt[atom], ccSpace|ccBegin|ccEnd|ccTok) {
 			return atom
 		}
 		atom++

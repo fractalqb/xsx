@@ -48,23 +48,12 @@ func (p *IndentingPrinter) Begin(bracket rune, meta bool) (err error) {
 			return err
 		}
 	}
-	switch bracket {
-	case '(':
-		if _, err := p.Writer.Write([]byte("(")); err != nil {
+	if isAny(byte(bracket), ccBegin) {
+		if _, err := p.Writer.Write([]byte{byte(bracket)}); err != nil {
 			return err
 		}
-		p.nest = append(p.nest, ')')
-	case '[':
-		if _, err := p.Writer.Write([]byte("[")); err != nil {
-			return err
-		}
-		p.nest = append(p.nest, ']')
-	case '{':
-		if _, err := p.Writer.Write([]byte("{")); err != nil {
-			return err
-		}
-		p.nest = append(p.nest, '}')
-	default:
+		p.nest = append(p.nest, closingRune(bracket))
+	} else {
 		return fmt.Errorf("illegal opening bracket '%c'", bracket)
 	}
 	return nil
@@ -92,20 +81,7 @@ func (p *IndentingPrinter) Atom(atom string, meta bool, quote QuoteMode) (err er
 	} else {
 		p.needsep = true
 	}
-	if meta {
-		if _, err = p.Writer.Write([]byte(MetaStr)); err != nil {
-			return err
-		}
-	}
-	switch quote {
-	case Qforce:
-		err = QuoteTo(atom, p.Writer)
-	case QSUPPRESS:
-		_, err = p.Writer.Write([]byte(atom))
-	default:
-		_, err = CondQuoteTo(atom, p.Writer)
-	}
-	return err
+	return printAtom(p.Writer, atom, meta, quote)
 }
 
 func (p *IndentingPrinter) Newline(count int, indent int) (err error) {

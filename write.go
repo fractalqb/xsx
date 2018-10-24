@@ -11,7 +11,7 @@ import (
 // quoted atoms. I.e. '"' is replaces with '\"' and '\' is replaced with '\\'.
 // The result is written to the dst output buffer.
 func EscapeTo(str string, dst io.Writer) (numEsc int, err error) {
-	var res int = 0
+	var res int
 	for _, c := range str {
 		switch c {
 		case '"':
@@ -93,16 +93,9 @@ const (
 	Qcond QuoteMode = iota
 	// Always quote
 	Qforce
-	// QSUPPRESS supresses quoting of an atom. This might break XSX syntax!
+	// QSUPPRESS suppresses quoting of an atom. This might break XSX syntax!
 	QSUPPRESS
 )
-
-type Printer interface {
-	Begin(bracket rune, meta bool) error
-	End() error
-	Atom(atom string, meta bool, quote QuoteMode) error
-	Newline(count int, indent int) error
-}
 
 type B rune
 type Bm rune
@@ -117,7 +110,7 @@ type Nl struct {
 	Indent int
 }
 
-func Print(p Printer, token ...interface{}) (err error) {
+func Write(p Printer, token ...interface{}) (err error) {
 	for _, t := range token {
 		switch tok := t.(type) {
 		case Nl:

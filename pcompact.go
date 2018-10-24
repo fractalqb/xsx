@@ -64,20 +64,7 @@ func (p *CompactPrinter) Atom(atom string, meta bool, quote QuoteMode) (err erro
 		}
 	}
 	p.sep = true
-	if meta {
-		if _, err = p.Writer.Write([]byte(MetaStr)); err != nil {
-			return err
-		}
-	}
-	switch quote {
-	case Qforce:
-		err = QuoteTo(atom, p.Writer)
-	case QSUPPRESS:
-		_, err = p.Writer.Write([]byte(atom))
-	default:
-		_, err = CondQuoteTo(atom, p.Writer)
-	}
-	return err
+	return printAtom(p.Writer, atom, meta, quote)
 }
 
 func (p *CompactPrinter) Newline(count int, indent int) error {

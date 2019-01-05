@@ -1,8 +1,6 @@
 # ![XSX-Logo](doc/xsx-logo.png?raw=true) – eXtended S-eXpressions
-[![Build Status](https://travis-ci.org/fractalqb/xsx.svg)](https://travis-ci.org/fractalqb/xsx)
-[![codecov](https://codecov.io/gh/fractalqb/xsx/branch/master/graph/badge.svg)](https://codecov.io/gh/fractalqb/xsx)
-[![Go Report Card](https://goreportcard.com/badge/github.com/fractalqb/xsx)](https://goreportcard.com/report/github.com/fractalqb/xsx)
-[![GoDoc](https://godoc.org/github.com/fractalqb/xsx?status.svg)](https://godoc.org/github.com/fractalqb/xsx)
+
+[**Repository moved to codeberg.org**](https://codeberg.org/fractalqb/xsx)
 
 `import "git.fractalqb.de/fractalqb/xsx"`
 
